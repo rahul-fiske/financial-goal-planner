@@ -13,3 +13,6 @@ __pycache__/
 *.pyc
 .DS_Store
 model.json
+
+# Local scratch/archive, never published
+/archive/
