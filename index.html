@@ -1,0 +1,3083 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Financial Goal Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@600&display=swap">
+</head>
+<body>
+<style id="gp-style">
+/* Lifted from the v37 planner page (_archive/v37_reference) on 2026-09-19; the chart palette tokens
+   (--c-*, --s*) are the validated set — see the project memory chart_palette. */
+/* ---------------------------------------------------------------- tokens */
+:root{
+  color-scheme: light;
+  --page:#eef1f2; --surface:#fbfcfc; --surface-2:#f4f7f7; --sunk:#e7ecec;
+  --ink:#0f172a; --ink-2:#46545f; --muted:#78878f;
+  --line:#dce3e4; --line-strong:#c3cdcf;
+  --accent:#0f766e; --accent-ink:#0b5c56; --accent-soft:#dbeeeb;
+  --edit-bg:#fdf6e4; --edit-line:#e0c689; --edit-focus:#b45309;
+  --good:#0ca30c; --warn:#fab219; --serious:#ec835a; --critical:#d03b3b;
+  --good-wash:#e6f6e6; --crit-wash:#fbe9e9; --warn-wash:#fdf3e0;
+  --s1:#2a78d6; --s2:#1baf7a; --s3:#eb6834; --s4:#4a3aa7; --s5:#e87ba4;
+  /* the corpus chart carries five meanings at once, so it gets its own
+     set — validated for colour-vision separation in both themes. The
+     brand teal is deliberately not among them: at chroma 0.086 it reads
+     as grey beside the others. */
+  --c-rec:#4a3aa7; --c-proj:#1baf7a; --c-need:#eda100; --c-ret:#2a78d6; --c-goal:#eb6834;
+  --grid:#e3e9e9; --axis:#c3cdcf;
+  --shadow:0 1px 2px rgba(15,23,42,.05), 0 8px 24px -16px rgba(15,23,42,.28);
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --page:#0a0f12; --surface:#131a1e; --surface-2:#182126; --sunk:#0e1518;
+    --ink:#eaf2f2; --ink-2:#a9b8b9; --muted:#7e9092;
+    --line:#23302f; --line-strong:#32423f;
+    --accent:#2dd4bf; --accent-ink:#5eead4; --accent-soft:#0f2f2c;
+    --edit-bg:#241f10; --edit-line:#6b5620; --edit-focus:#fbbf24;
+    --good-wash:#0d240d; --crit-wash:#2a1213; --warn-wash:#2a2110;
+    --s1:#3987e5; --s2:#199e70; --s3:#d95926; --s4:#9085e9; --s5:#d55181;
+    --c-rec:#9085e9; --c-proj:#199e70; --c-need:#c98500; --c-ret:#3987e5; --c-goal:#d95926;
+    --grid:#1e2a2c; --axis:#32423f;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --page:#0a0f12; --surface:#131a1e; --surface-2:#182126; --sunk:#0e1518;
+  --ink:#eaf2f2; --ink-2:#a9b8b9; --muted:#7e9092;
+  --line:#23302f; --line-strong:#32423f;
+  --accent:#2dd4bf; --accent-ink:#5eead4; --accent-soft:#0f2f2c;
+  --edit-bg:#241f10; --edit-line:#6b5620; --edit-focus:#fbbf24;
+  --good-wash:#0d240d; --crit-wash:#2a1213; --warn-wash:#2a2110;
+  --s1:#3987e5; --s2:#199e70; --s3:#d95926; --s4:#9085e9; --s5:#d55181;
+  --c-rec:#9085e9; --c-proj:#199e70; --c-need:#c98500; --c-ret:#3987e5; --c-goal:#d95926;
+  --grid:#1e2a2c; --axis:#32423f;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.9);
+}
+
+/* ------------------------------------------------------------------ base */
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--page); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{font-family:"IBM Plex Serif",Georgia,serif;font-weight:600;margin:0;text-wrap:balance}
+.num{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.wrap{max-width:1220px;margin:0 auto;padding:0 22px}
+
+/* ---------------------------------------------------------------- header */
+.top{
+  position:sticky;top:env(safe-area-inset-top,0px);z-index:40;background:var(--surface);
+  border-bottom:1px solid var(--line);
+}
+.topin{display:flex;align-items:center;gap:16px;padding:13px 0 0;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
+.brand h1{font-size:19px;letter-spacing:-.01em}
+.brand .sub{font-size:11.5px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.verdict-pill{
+  display:inline-flex;align-items:center;gap:8px;padding:5px 12px 5px 10px;
+  border-radius:999px;font-size:12.5px;font-weight:600;white-space:nowrap;
+}
+.verdict-pill .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.pill-bad{background:var(--crit-wash);color:var(--critical)}
+.pill-bad .dot{background:var(--critical)}
+.pill-ok{background:var(--good-wash);color:var(--good)}
+.pill-ok .dot{background:var(--good)}
+.saveind{font-size:11px;color:var(--muted);letter-spacing:.04em;min-width:54px;text-align:right}
+/* ------------------------------------------------- where the plan is kept */
+.planbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-left:auto}
+.storepill{display:inline-flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.03em;
+  padding:3px 9px;border-radius:999px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.storepill .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
+.storepill.live{color:var(--good);background:var(--good-wash)}
+.storepill.live .dot{background:var(--good)}
+.storepill.warn{color:var(--warn);background:var(--warn-wash)}
+.storepill.warn .dot{background:var(--warn)}
+.btn-danger[data-armed="1"]{border-color:var(--critical);color:var(--critical);font-weight:600}
+/* ------------------------------------------------------ dismissible notes */
+#notices:empty{display:none}
+.notice{display:flex;align-items:flex-start;gap:12px;background:var(--sunk);color:var(--ink-2);
+  font-size:12.5px;line-height:1.5;padding:9px 22px;border-bottom:1px solid var(--line)}
+.notice.warn{background:var(--warn-wash)}
+.notice .x{margin-left:auto;flex:none;background:none;border:0;cursor:pointer;color:var(--muted);
+  font-size:16px;line-height:1;padding:0 2px}
+.notice .x:hover{color:var(--ink)}
+
+.tabs{display:flex;gap:2px;margin-top:11px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{
+  background:none;border:0;border-bottom:2px solid transparent;cursor:pointer;
+  padding:9px 13px;font-size:13.5px;color:var(--ink-2);white-space:nowrap;
+}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--accent-ink);border-bottom-color:var(--accent);font-weight:600}
+
+main{padding:26px 0 72px}
+section{margin-bottom:30px}
+.sechead{display:flex;align-items:baseline;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.sechead h2{font-size:16px}
+.sechead .note{font-size:12.5px;color:var(--muted)}
+.sechead .spacer{margin-left:auto}
+
+/* ---------------------------------------------------------------- banner */
+.banner{
+  display:flex;gap:16px;background:var(--surface);border:1px solid var(--line);
+  border-left:4px solid var(--critical);border-radius:var(--r);padding:16px 18px;
+  box-shadow:var(--shadow);
+}
+.banner.ok{border-left-color:var(--good)}
+.banner .icon{font-size:19px;line-height:1.2;flex:none}
+.banner h2{font-size:17px;margin-bottom:3px}
+.banner p{margin:0;color:var(--ink-2);font-size:13.5px;max-width:70ch}
+
+/* --------------------------------------------------- as-of / tax strip */
+.strip{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;
+  padding:13px 16px;border:1px solid var(--line);border-radius:10px;
+  background:var(--surface);margin-bottom:14px}
+.strip .grp{display:flex;flex-direction:column;gap:5px}
+.strip .grp > span:first-child{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.strip .ctl{display:flex;gap:6px;align-items:center}
+.strip select,.strip input[type=number],.strip input[type=text]{padding:6px 8px}
+.strip .sep{flex:1 1 0;min-width:8px}
+.rollnote{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;
+  background:var(--warn-wash);border:1px solid var(--line);border-radius:10px;
+  padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.5;color:var(--ink-2)}
+.rollnote b{color:var(--ink)}
+.rollnote .acts{display:flex;gap:8px;flex:0 0 auto}
+/* --------------------------------------------------------- standing bar */
+.stand{display:flex;flex-wrap:wrap;gap:22px;align-items:center;
+  border:1px solid var(--line);border-radius:12px;background:var(--surface);
+  padding:16px 18px;margin-bottom:16px}
+.stand .verdict{flex:1 1 280px;min-width:260px}
+.stand .verdict .big{font-size:26px;font-weight:600;letter-spacing:-.01em;line-height:1.15}
+.stand .verdict .sub{display:block;font-size:13px;color:var(--ink-2);margin-top:6px;line-height:1.5}
+.bars{flex:1 1 340px;min-width:300px;display:flex;flex-direction:column;gap:9px}
+.barrow{display:grid;grid-template-columns:104px 1fr auto;gap:11px;align-items:center;font-size:12.5px}
+.barrow .lbl{color:var(--muted);text-align:right}
+.barrow .track{height:15px;border-radius:4px;background:color-mix(in srgb,var(--ink) 6%,transparent);overflow:hidden}
+.barrow .fill{height:100%;border-radius:4px}
+.barrow .val{font-variant-numeric:tabular-nums;font-weight:600;min-width:78px;text-align:right}
+/* ---------------------------------------------------- drawn-from chips */
+.drawn{display:inline-flex;gap:5px;align-items:baseline;white-space:nowrap;
+  background:color-mix(in srgb,var(--ink) 5%,transparent);border-radius:5px;
+  padding:2px 7px;margin:1px 4px 1px 0;font-variant-numeric:tabular-nums}
+.drawn b{font-weight:600;color:var(--ink)}
+.drawn em{font-style:normal;color:var(--s5);margin-left:2px}
+/* ------------------------------------------------------- snapshot rows */
+tr.snap td{background:color-mix(in srgb,var(--ink) 3%,transparent);
+  border-top:1px dashed var(--line);font-size:12.5px;padding-top:6px;padding-bottom:6px}
+tr.snap:hover td{background:color-mix(in srgb,var(--ink) 5%,transparent)}
+tr.snap .when{display:flex;align-items:center;gap:8px}
+tr.snap .rail{width:14px;height:0;border-top:1.5px solid var(--line);
+  margin-left:10px;flex:0 0 auto}
+tr.snap input[type=date]{padding:4px 6px;font-size:12.5px}
+tr.snap .w-num{min-width:104px}
+tr.live td{background:color-mix(in srgb,var(--s1) 5%,transparent)}
+.inprog{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.derivedcell{font-variant-numeric:tabular-nums;color:var(--ink-2)}
+/* ----------------------------------------------------------------- tiles */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));
+  gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.tile{background:var(--surface);padding:14px 16px 15px}
+.tile .k{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.tile .v{font-size:23px;margin-top:5px;letter-spacing:-.015em;font-family:"IBM Plex Mono",monospace}
+.tile .m{font-size:12px;color:var(--ink-2);margin-top:3px}
+.tile .v.bad{color:var(--critical)} .tile .v.good{color:var(--good)}
+
+/* ----------------------------------------------------------------- panel */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--shadow);overflow:hidden}
+.panel-pad{padding:16px 18px}
+
+/* ----------------------------------------------------------------- chart */
+.chartbox{position:relative}
+.chartbox svg{display:block;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:14px;padding:0 4px 10px;font-size:12px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:11px;height:11px;border-radius:3px;display:block;flex:none}
+.legend i.ln{height:3px;border-radius:2px;width:16px}
+.tip{
+  position:absolute;pointer-events:none;opacity:0;transition:opacity .1s;
+  background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;
+  padding:9px 11px;font-size:12px;box-shadow:var(--shadow);z-index:20;min-width:150px;
+}
+.tip .th{font-weight:600;margin-bottom:5px;font-size:12.5px}
+.tip .tr{display:flex;justify-content:space-between;gap:14px;line-height:1.7}
+.tip .tr b{font-weight:500;font-family:"IBM Plex Mono",monospace}
+.tip .sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+
+/* ----------------------------------------------------------------- table */
+.tblwrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{
+  text-align:left;font-weight:600;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--muted);padding:9px 10px;border-bottom:1px solid var(--line-strong);white-space:nowrap;
+}
+th.r,td.r{text-align:right}
+td{padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--surface-2)}
+tfoot td{padding:9px 10px;border-top:1px solid var(--line-strong);font-weight:600;background:var(--surface-2)}
+td.mono,th.mono{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+tr.retired td{background:color-mix(in srgb,var(--s4) 5%,transparent)}
+tr.retired:hover td{background:color-mix(in srgb,var(--s4) 9%,transparent)}
+
+/* ----------------------------------------------------------------- input */
+input[type=text],input[type=number],select{
+  font:inherit;color:var(--ink);background:var(--edit-bg);
+  border:1px solid var(--edit-line);border-radius:6px;padding:5px 7px;width:100%;
+}
+input[type=number],input.money{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;text-align:right}
+input:focus,select:focus{outline:2px solid var(--edit-focus);outline-offset:-1px;border-color:var(--edit-focus)}
+select{cursor:pointer;-webkit-appearance:none;appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,var(--edit-focus) 50%),linear-gradient(135deg,var(--edit-focus) 50%,transparent 50%);
+  background-position:calc(100% - 13px) 52%,calc(100% - 8px) 52%;
+  background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:24px;text-align:left}
+input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
+.w-name{min-width:150px} .w-num{min-width:124px} .w-yr{min-width:72px} .w-sel{min-width:104px}
+
+.btn{
+  background:var(--surface);border:1px solid var(--line-strong);border-radius:7px;
+  padding:6px 12px;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;gap:6px;
+}
+.btn:hover{background:var(--surface-2);border-color:var(--accent)}
+.btn-accent{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:500}
+:root[data-theme="dark"] .btn-accent,:root:not([data-theme="light"]) .btn-accent{color:#06201e}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .btn-accent{color:#fff}}
+.btn-accent:hover{background:var(--accent-ink);border-color:var(--accent-ink)}
+.icon-btn{background:none;border:0;cursor:pointer;color:var(--muted);padding:4px 6px;border-radius:5px;line-height:1}
+.icon-btn:hover{background:var(--crit-wash);color:var(--critical)}
+
+/* ----------------------------------------------------------------- misc */
+.status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;white-space:nowrap}
+.status .g{width:7px;height:7px;border-radius:50%;flex:none}
+.s-funded{color:var(--good)} .s-funded .g{background:var(--good)}
+.s-partial{color:var(--serious)} .s-partial .g{background:var(--serious)}
+.s-unfunded{color:var(--critical)} .s-unfunded .g{background:var(--critical)}
+.s-none{color:var(--muted)} .s-none .g{background:var(--muted)}
+
+.fixgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(238px,1fr));gap:14px}
+.fix{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:15px 16px;box-shadow:var(--shadow)}
+.fix .lever{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--accent-ink);font-weight:600}
+.fix .big{font-family:"IBM Plex Mono",monospace;font-size:26px;margin:6px 0 2px;letter-spacing:-.02em}
+.fix .from{font-size:12.5px;color:var(--muted)}
+.fix p{margin:9px 0 0;font-size:12.5px;color:var(--ink-2)}
+
+.asmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(184px,1fr));gap:13px 18px}
+.fld-wide{grid-column:1 / -1}
+.retgrp{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-start;
+  border-top:1px solid var(--line);padding-top:13px;margin-top:2px}
+.retgrp .pct{display:flex;align-items:center;gap:6px}
+.retgrp .pct input{width:92px}
+.retgrp .pct input:disabled{opacity:.45;cursor:not-allowed}
+.retgrp .why{flex:1 1 300px;min-width:240px;font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+/* --------------------------------------------------- assumptions summary */
+.asum{display:flex;flex-wrap:wrap;gap:10px 26px;align-items:baseline}
+.asum .it{display:flex;flex-direction:column;gap:2px}
+.asum .k{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.asum .v{font-size:14.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.fld{display:flex;flex-direction:column;gap:4px}
+.fld label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.fld label.chk{display:flex;gap:8px;align-items:center;font-size:13px;letter-spacing:0;
+  text-transform:none;color:var(--ink-2);padding-top:4px;cursor:pointer}
+.fld .hint{font-size:11.5px;color:var(--muted)}
+.derived{background:var(--sunk);border:1px dashed var(--line-strong);border-radius:6px;
+  padding:5px 8px;font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--ink-2)}
+
+.keyline{border:0;border-top:1px solid var(--line);margin:0}
+.empty{padding:26px 18px;text-align:center;color:var(--muted);font-size:13px}
+.callout{background:var(--accent-soft);border-radius:var(--r);padding:13px 16px;font-size:13px;color:var(--ink-2)}
+.callout b{color:var(--ink)}
+.rowactions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.legendnote{font-size:12px;color:var(--muted);padding:2px 4px 0}
+.pillsm{display:inline-block;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;
+  padding:2px 7px;border-radius:999px;background:var(--sunk);color:var(--muted);font-weight:600}
+.seg{display:inline-flex;background:var(--edit-bg);border:1px solid var(--edit-line);border-radius:6px;overflow:hidden}
+.seg button{background:none;border:0;padding:5px 9px;font-size:12px;cursor:pointer;color:var(--ink-2);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff;font-weight:600}
+:root[data-theme="dark"] .seg button[aria-pressed="true"]{color:#06201e}
+
+/* ------------------------------------------------ goal_planner additions */
+[hidden]{display:none!important}   /* .btn and .tabs set display; hidden must still win */
+.safety{background:var(--accent-soft);color:var(--ink);border-bottom:1px solid var(--line);font-size:13px;line-height:1.5}
+.safetyin{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px}
+.safetyin > span{flex:1 1 420px}
+.safety b{font-weight:600}
+.btn-sm{padding:4px 10px;font-size:12.5px}
+.btn-lg{padding:10px 18px;font-size:14.5px}
+.btn:disabled{opacity:.55;cursor:progress}
+.notice .acts{display:flex;gap:8px;flex:none;margin-left:auto}
+.notice.ask{border-left:4px solid var(--warn)}
+.welcome{max-width:560px;margin:48px auto 0;padding:30px 30px 24px;text-align:center}
+.welcome h2{font-size:22px;margin-bottom:6px}
+.welcome p{color:var(--ink-2);margin:0 0 20px}
+.welcome .wbtns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:18px}
+.welcome .hint{font-size:12.5px;color:var(--muted);margin:0}
+.welcome code{font-family:"IBM Plex Mono",monospace;font-size:12px;background:var(--sunk);padding:1px 5px;border-radius:4px}
+@media (max-width:640px){
+  .wrap{padding:0 16px}
+  .brand .sub{display:none}
+  .notice{padding:9px 16px;flex-wrap:wrap}
+  .welcome{margin-top:24px;padding:22px 18px}
+}
+/* Phase 4b: the estimated history year reads as scaffolding, not evidence */
+.pillsm.est{background:transparent;border:1px dashed var(--line-strong);color:var(--muted)}
+tr.estrow td{color:var(--muted)}
+tr.estrow input{background:transparent;border-style:dashed}
+.estnote{font-size:12px;color:var(--muted);font-style:italic}
+/* v1.3.0: "needed but not paid" in the money-in/out legend and bars */
+.legend i.unf{background:var(--crit-wash);border:1.5px dashed var(--critical)}
+/* small inline info glyph for a column-header tooltip (plain title attribute) */
+.infoicon{display:inline-block;margin-left:4px;font-size:11px;color:var(--muted);cursor:help;font-weight:400;letter-spacing:0;text-transform:none}
+</style>
+<div id="gp-root"></div>
+<script id="gp-app">
+(function(){
+"use strict";
+/* ---- src/schema/util.mjs ---- */
+/* Small pure helpers shared by schema and engine. Ported verbatim from
+   the v37 planner page (_archive/v37_reference) — behaviour must not drift (see tests/parity_html.mjs). */
+
+function uid(p){ return p + Math.random().toString(36).slice(2,8); }
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+function num(v, fb){ const n = parseFloat(v); return isFinite(n) ? n : (fb||0); }
+/* rupee fields are typed with grouping separators; read the digits back out */
+function mnum(v){ const n = parseFloat(String(v).replace(/[^0-9.-]/g, "")); return isFinite(n) ? n : 0; }
+
+/* The date the holding values were taken from, as YYYY-MM-DD. Plans written
+   before this was a full date carry YYYY-MM, or a bare year. */
+function systemDate(now){
+  const d = now || new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0")
+                         + "-" + String(d.getDate()).padStart(2,"0");
+}
+function normDate(v, fallbackYear){
+  const t = String(v == null ? "" : v).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  if (/^\d{4}-\d{2}$/.test(t)) return t + "-01";
+  if (/^\d{4}$/.test(t)) return t + "-01-01";
+  return (fallbackYear || new Date().getFullYear()) + "-01-01";
+}
+function dateYear(v){ return parseInt(String(v).slice(0,4), 10); }
+function asOfYear(s){ return dateYear(normDate(s.a.asOf)); }
+
+/* ---- src/schema/plan.mjs ---- */
+/* Plan schema: defaults, normalisation, load-time merge.
+   Ported verbatim from the v37 planner page (_archive/v37_reference). Differences from the original
+   are structural only (no globals, no DOM):
+     - merge() returns {ok, state, error} instead of assigning a global and
+       calling notice(); the refusal rule for newer data is unchanged.
+     - rollForward() takes the "today" date as an argument.               */
+
+const SCHEMA = 1;
+
+/* Each holding says WHEN its gain is taxed, and at what rate. A rate of 0 is
+   how an exempt holding is expressed. Starting points from Indian rules for
+   FY 2025-26, editable per holding, not advice. */
+const TAX_WHEN = [
+  ["tax_on_withdrawal", "On withdrawal, on the gain"],
+  ["tax_at_year_end",   "Every year, on the gain"]
+];
+const TAX_DEFAULTS = {
+  "Equity":  {when:"tax_on_withdrawal", rate:0.125},
+  "EPF-PPF": {when:"tax_on_withdrawal", rate:0},
+  "NPS":     {when:"tax_on_withdrawal", rate:0.12},
+  "Debt":    {when:"tax_on_withdrawal", rate:0.30},
+  "Cash":    {when:"tax_at_year_end",   rate:0.30},
+  "Property":{when:"tax_on_withdrawal", rate:0.125},
+  "Other":   {when:"tax_on_withdrawal", rate:0}
+};
+function taxDefault(cat){ return TAX_DEFAULTS[cat] || TAX_DEFAULTS["Other"]; }
+const CATS = ["Equity","EPF-PPF","NPS","Debt","Cash","Property","Other"];
+
+const A = {
+  retYear: s => s.a.currentYear + (s.a.retirementAge - s.a.currentAge),
+  endYear: s => s.a.currentYear + (s.a.lifeExpectancy - s.a.currentAge)
+};
+
+/* The sample household: a made-up 38-year-old couple with one child,
+   retiring at 58 on 75,000 a month in today's money. Nothing real belongs
+   here. Withdraw order runs deposits, equity, PPF, EPF, NPS. */
+function defaultState(){
+  return {
+    v: 2, schemaVersion: SCHEMA,
+    a: {
+      currentYear: 2026, currentAge: 38, retirementAge: 58, lifeExpectancy: 85,
+      postRetReturn: 0.065, usePostRet: true,
+      asOf: "2026-09-12", rolledThrough: 2025, cgExempt: 125000
+    },
+    investments: [
+      {id:"i1", name:"Provident fund (EPF)", cat:"EPF-PPF", owner:"Self",  val:1800000, cost:1800000, add:180000, step:0.05, ret:0.075, until:null, avail:null, pri:4, on:true, taxWhen:"tax_on_withdrawal", taxRate:0},
+      {id:"i2", name:"PPF",                  cat:"EPF-PPF", owner:"Self",  val:800000,  cost:800000,  add:150000, step:0,    ret:0.071, until:null, avail:null, pri:3, on:true, taxWhen:"tax_on_withdrawal", taxRate:0},
+      {id:"i3", name:"Equity mutual funds",  cat:"Equity",  owner:"Joint", val:2200000, cost:1400000, add:300000, step:0.05, ret:0.105, until:null, avail:null, pri:2, on:true, taxWhen:"tax_on_withdrawal", taxRate:0.125},
+      {id:"i4", name:"NPS",                  cat:"NPS",     owner:"Self",  val:600000,  cost:600000,  add:60000,  step:0,    ret:0.09,  until:null, avail:2048, pri:5, on:true, taxWhen:"tax_on_withdrawal", taxRate:0.12},
+      {id:"i5", name:"Bank deposits",        cat:"Cash",    owner:"Joint", val:500000,  cost:500000,  add:0,      step:0,    ret:0.06,  until:null, avail:null, pri:1, on:true, taxWhen:"tax_at_year_end",   taxRate:0.30}
+    ],
+    goals: [
+      {id:"g1", name:"New car",             kind:"onetime",   start:2030, end:2030, amt:1200000, infl:0.06, ess:false, on:true, isRet:false},
+      {id:"g2", name:"Child's college",     kind:"onetime",   start:2040, end:2040, amt:2500000, infl:0.07, ess:true,  on:true, isRet:false},
+      {id:"g3", name:"Retirement expenses", kind:"recurring", start:2046, end:2073, amt:900000,  infl:0.06, ess:true,  on:true, isRet:true}
+    ],
+    history: [
+      {id:"h1", year:2022, actual:2150000, contribution:500000, note:"Started keeping a record", snaps:[]},
+      {id:"h2", year:2023, actual:2940000, contribution:550000, note:"", snaps:[]},
+      {id:"h3", year:2024, actual:3830000, contribution:600000, note:"Moved the SIP into index funds", snaps:[]},
+      {id:"h4", year:2025, actual:4680000, contribution:640000, note:"Flat market year", snaps:[]},
+      {id:"h5", year:2026, actual:5900000, contribution:690000, note:"", snaps:[
+        {id:"s1", date:"2026-03-31", total:5480000, added:340000, note:"Q1 SIPs and PF"},
+        {id:"s2", date:"2026-09-12", total:5900000, added:350000, note:""}]}
+    ]
+  };
+}
+
+/* Withdraw order is an ordinal: 1 is sold first. Distinct values are
+   compressed to 1..n once ON LOAD (merge) — order and ties both survive.
+   Never called from normalize(), which would rewrite the number under the
+   cursor while it is being typed. */
+function tidyOrder(s){
+  const vals = Array.from(new Set(s.investments.map(i => num(i.pri, 50)))).sort((a,b) => a-b);
+  const map = {}; vals.forEach((v,k) => map[v] = k + 1);
+  s.investments.forEach(i => i.pri = map[num(i.pri, 50)]);
+}
+
+/* Holdings are kept in withdraw-priority order, ties broken by id. The engine is order-sensitive inside an equal-priority band
+   (the shared exemption is consumed in order), so this makes the result
+   independent of the order rows were typed in. */
+function byWithdrawOrder(a, b){
+  const d = num(a.pri, 50) - num(b.pri, 50);
+  if (d) return d;
+  const x = String(a.id), y = String(b.id);
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+function sortHoldings(s){ s.investments.sort(byWithdrawOrder); return s; }
+
+function normalize(s){
+  s.a.asOf = normDate(s.a.asOf, s.a.currentYear);
+  s.a.currentYear = asOfYear(s);                      // the as-of date is the anchor
+  if (s.a.rolledThrough == null) s.a.rolledThrough = s.a.currentYear - 1;
+  if (s.a.cgExempt == null) s.a.cgExempt = 125000;
+  delete s.a.taxOn; delete s.a.strategy;              // v25 fields, no longer used
+  s.investments.forEach(i => {
+    const d = taxDefault(i.cat);
+    if (i.taxRate == null) i.taxRate = d.rate;
+    if (i.taxWhen == null){
+      i.taxWhen = (i.taxKind === "annual") ? "tax_at_year_end"
+                : (i.taxKind ? "tax_on_withdrawal" : d.when);
+    }
+    if (i.taxWhen !== "tax_at_year_end" && i.taxWhen !== "tax_on_withdrawal")
+      i.taxWhen = "tax_on_withdrawal";
+    if (i.cost == null) i.cost = num(i.val);          // assume no embedded gain unless told
+    if (i.pri == null) i.pri = 50;
+    delete i.taxKind;
+  });
+  s.a.retirementAge = Math.max(s.a.currentAge, Math.min(s.a.retirementAge, s.a.lifeExpectancy));
+  s.a.lifeExpectancy = Math.max(s.a.lifeExpectancy, s.a.retirementAge);
+  const ry = A.retYear(s), ey = A.endYear(s);
+  s.goals.forEach(g => {
+    if (g.isRet){ g.kind = "recurring"; g.start = ry; g.end = ey; }
+    if (g.kind === "onetime") g.end = g.start;
+  });
+
+  /* The as-of year always has a row, and that row is the holdings total.
+     Snapshots recorded during the year live under it. */
+  s.history.forEach(h => {
+    if (!Array.isArray(h.snaps)) h.snaps = [];
+    h.snaps.forEach(sn => { sn.date = normDate(sn.date, h.year); if (sn.id == null) sn.id = uid("sn"); });
+    h.snaps.sort((a,b) => String(a.date).localeCompare(String(b.date)));
+  });
+  const liveY = asOfYear(s);
+  let live = s.history.find(h => num(h.year) === liveY);
+  if (!live){
+    live = {id:uid("h"), year:liveY, actual:0, contribution:0, note:"", snaps:[]};
+    s.history.push(live);
+  }
+  live.actual = s.investments.filter(i => i.on).reduce((t,i) => t + num(i.val), 0);
+  /* a year with snapshots gets its contribution from them, not by hand */
+  s.history.forEach(h => {
+    if (h.snaps.length) h.contribution = h.snaps.reduce((t,sn) => t + num(sn.added), 0);
+  });
+  s.a.liveYear = liveY;
+  return s;
+}
+
+/* Load-time merge. Newer data in an older page is refused, never trimmed. */
+function merge(loaded){
+  if (!loaded || typeof loaded !== "object") return {ok:false, error:"not a plan"};
+  const d = defaultState();
+  if (num(loaded.schemaVersion) > SCHEMA){
+    return {ok:false, error:"newer", dataVersion: Math.round(num(loaded.schemaVersion)), pageVersion: SCHEMA};
+  }
+  const state = {
+    v: 2, schemaVersion: SCHEMA,
+    savedAt: loaded.savedAt || null,
+    a: Object.assign({}, d.a, loaded.a || {}),
+    investments: Array.isArray(loaded.investments) ? loaded.investments : d.investments,
+    goals: Array.isArray(loaded.goals) ? loaded.goals : d.goals,
+    history: Array.isArray(loaded.history) ? loaded.history : d.history
+  };
+  if (loaded.a && !loaded.a.asOf && loaded.a.currentYear){
+    state.a.asOf = Math.round(num(loaded.a.currentYear)) + "-01";
+    state.a.rolledThrough = Math.round(num(loaded.a.currentYear)) - 1;
+  }
+  state.history.forEach(h => { if (!h.id) h.id = uid("h"); });
+  tidyOrder(state);
+  state.investments.forEach(i => { if (!i.id) i.id = uid("i"); });
+  state.goals.forEach(g => { if (!g.id) g.id = uid("g"); });
+  sortHoldings(state);
+  normalize(state);
+  return {ok:true, state};
+}
+
+/* Year rollover. A finished calendar year becomes a history row; the amount
+   invested in it is left at zero deliberately. `today` is injected. */
+function rollForward(state, today){
+  const now = today || new Date();
+  const sysY = now.getFullYear();
+  const from = asOfYear(state);
+  if (from >= sysY || num(state.a.rolledThrough) >= sysY - 1){
+    if (num(state.a.rolledThrough) < sysY - 1) state.a.rolledThrough = sysY - 1;
+    return null;
+  }
+  const undo = clone(state);
+  const total = state.investments.filter(i => i.on).reduce((t,i) => t + num(i.val), 0);
+  const closed = [];
+  for (let y = from; y < sysY; y++){
+    if (!state.history.some(h => num(h.year) === y)){
+      state.history.push({id:uid("h"), year:y, actual:total, contribution:0, snaps:[],
+        note:"Carried forward automatically — replace with the real year-end figure"});
+    }
+    closed.push(y);
+  }
+  state.a.rolledThrough = sysY - 1;
+  state.a.asOf = systemDate(now);
+  normalize(state);
+  return {years: closed, to: sysY, undo};
+}
+
+/* Opening a file also LINKS it, so "is this actually a plan?" has teeth:
+   pointing at an unrelated .json and then saving would overwrite it. */
+function looksLikePlan(o){
+  return !!o && typeof o === "object" && !Array.isArray(o)
+      && (Array.isArray(o.investments) || Array.isArray(o.goals));
+}
+
+/* ---- src/schema/file.mjs ---- */
+/* goal_plan.json — reading and writing the data file.
+
+   Written: strict JSON, 2-space indent, stable key order with schemaVersion
+   first, money as plain integer rupees. Read: that, or a legacy plan.js
+   carrying `window.PLAN = {…}` (migration only; .js is never written).
+
+   Holdings are written in withdraw-priority order, ties by id — the same
+   order the engine uses, so the file reads the way the money is drawn.
+   Goals keep their order; history is written by year. */
+
+
+const KEY_ORDER = {
+  root:  ["schemaVersion", "v", "savedAt", "a", "investments", "goals", "history"],
+  a:     ["asOf", "currentYear", "currentAge", "retirementAge", "lifeExpectancy",
+          "postRetReturn", "usePostRet", "cgExempt", "rolledThrough", "liveYear", "noEstimate"],
+  inv:   ["id", "name", "cat", "owner", "val", "cost", "add", "step", "ret",
+          "until", "avail", "pri", "on", "taxWhen", "taxRate"],
+  goal:  ["id", "name", "kind", "start", "end", "amt", "infl", "ess", "on", "isRet"],
+  hist:  ["id", "year", "actual", "contribution", "estimated", "note", "snaps"],
+  snap:  ["id", "date", "total", "added", "note", "byInv"]
+};
+const MONEY = {
+  inv: ["val", "cost", "add"], goal: ["amt"], hist: ["actual", "contribution"],
+  snap: ["total", "added"], a: ["cgExempt"]
+};
+
+function ordered(obj, keys, money){
+  const out = {};
+  for (const k of keys) if (k in obj && obj[k] !== undefined) out[k] = obj[k];
+  /* anything unknown is kept, after the known keys, alphabetically — a newer
+     field must never be dropped by an older writer */
+  Object.keys(obj).filter(k => !keys.includes(k)).sort()
+    .forEach(k => { if (obj[k] !== undefined) out[k] = obj[k]; });
+  for (const k of (money || [])) if (typeof out[k] === "number") out[k] = Math.round(out[k]);
+  return out;
+}
+
+function toFileObject(state){
+  const r = ordered(state, KEY_ORDER.root);
+  r.a = ordered(state.a, KEY_ORDER.a, MONEY.a);
+  r.investments = state.investments.slice().sort(byWithdrawOrder).map(i => ordered(i, KEY_ORDER.inv, MONEY.inv));
+  r.goals = state.goals.map(g => ordered(g, KEY_ORDER.goal, MONEY.goal));
+  r.history = state.history.slice().sort((x, y) => x.year - y.year).map(h => {
+    const o = ordered(h, KEY_ORDER.hist, MONEY.hist);
+    o.snaps = (h.snaps || []).map(sn => {
+      const s = ordered(sn, KEY_ORDER.snap, MONEY.snap);
+      if (s.byInv){
+        const b = {};
+        Object.keys(s.byInv).sort().forEach(k => b[k] = Math.round(s.byInv[k]));
+        s.byInv = b;
+      }
+      return s;
+    });
+    return o;
+  });
+  return r;
+}
+
+function serialiseJson(state){
+  return JSON.stringify(toFileObject(state), null, 2) + "\n";
+}
+
+/* Read a plan out of whatever was handed over: goal_plan.json, or a legacy
+   plan.js. The wrapper is peeled deliberately rather than by hunting for the
+   first "=" or "{", either of which a comment could contain. */
+function parsePlanText(text){
+  let t = String(text).replace(/^﻿/, "").trim();
+  t = t.replace(/^\/\*[\s\S]*?\*\//, "").trim();
+  while (/^\/\//.test(t)) t = t.replace(/^\/\/[^\n]*\n?/, "").trim();
+  t = t.replace(/^(?:window\s*\.\s*)?[\w$]+\s*=\s*/, "");   // window.PLAN = / window.GOAL_PLAN =
+  t = t.replace(/;\s*$/, "");
+  return JSON.parse(t);
+}
+
+/* Backup names: goal_plan_<YYYYMMDD-HHMMSS>.json, sortable, never localised. */
+function backupName(d){
+  const p = n => String(n).padStart(2, "0");
+  return "goal_plan_" + d.getFullYear() + p(d.getMonth()+1) + p(d.getDate())
+       + "-" + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()) + ".json";
+}
+
+/* ---- src/schema/history.mjs ---- */
+/* Phase 4b — one estimated prior history year.
+
+   The on-track comparison needs two closed years. With only one recorded,
+   a single prior year is worked back from it by reversing the engine's own
+   mid-year convention exactly (track() runs  close = prev + c + (prev + c/2)·r):
+
+       prev = (close − c·(1 + r/2)) / (1 + r)
+
+   r is the same value-weighted return track() assumes; c is what went in
+   during the recorded year (its own figure when there is one, otherwise the
+   plan's annual investing de-escalated by each holding's step-up).
+
+   THE TRAP: a year derived from the plan's own return sits on the planned
+   curve by construction, so its "gap" is zero by definition. It is therefore
+   stored as `estimated: true`, drawn hollow and dashed, and kept OUT of the
+   gap statistic and the on-track headline (see track()). It exists only to
+   give the chart a second point and a slope.
+
+   One year back only. Never derived over a real figure: typing a value into
+   the row clears the flag (ui/events.js), and a row that is not estimated is
+   never touched here. Deleting the row sets a.noEstimate so it stays gone.  */
+
+function estimateNote(fromYear, r){
+  return `Estimated, not a recorded value: worked back from ${fromYear} at the plan's `
+    + `${(r * 100).toFixed(2)}% assumed return.`;
+}
+
+/* Returns true when it added or re-derived a row. Pure apart from mutating s. */
+function ensureEstimate(s){
+  if (!s || !Array.isArray(s.history) || (s.a && s.a.noEstimate)) return false;
+  const liveY = asOfYear(s);
+  const recorded = s.history.filter(h => num(h.year) < liveY && !h.estimated)
+                            .sort((a, b) => num(a.year) - num(b.year));
+  if (recorded.length !== 1) return false;
+  const base = recorded[0], y = num(base.year) - 1;
+  let row = s.history.find(h => num(h.year) === y);
+  if (row && !row.estimated) return false;                 // never over a real one
+
+  const on = s.investments.filter(i => i.on);
+  const tot = on.reduce((t, i) => t + num(i.val), 0);
+  const r = tot ? on.reduce((t, i) => t + num(i.val) * num(i.ret), 0) / tot : 0.08;
+  const planAdd = yr => on.reduce((t, i) => t + num(i.add) / Math.pow(1 + num(i.step), s.a.currentYear - yr), 0);
+  const c = num(base.contribution) > 0 ? num(base.contribution) : planAdd(num(base.year));
+  const prev = (num(base.actual) - c * (1 + r / 2)) / (1 + r);
+  if (!(prev > 0)) return false;                           // nothing sensible to show
+
+  const want = {actual: Math.round(prev), contribution: Math.round(planAdd(y)), note: estimateNote(y + 1, r)};
+  if (!row){
+    row = {id: uid("h"), year: y, estimated: true, snaps: []};
+    s.history.push(row);
+  } else if (row.actual === want.actual && row.contribution === want.contribution && row.note === want.note){
+    return false;
+  }
+  Object.assign(row, want);
+  return true;
+}
+
+/* ---- src/engine/project.mjs ---- */
+/* Ported verbatim from the v37 planner page (_archive/v37_reference). The ONLY place maths lives.
+   Do not edit without re-running tests/parity_html.mjs. */
+
+/* Growth uses the mid-year convention:
+   growth = (opening + contribution/2) * return                              */
+function project(s){
+  const a = s.a, ry = A.retYear(s), ey = A.endYear(s);
+  /* withdraw-priority order, ties by id: the one deliberate change from v37 */
+  const inv = s.investments.filter(i => i.on).sort(byWithdrawOrder);
+  const goals = s.goals.filter(g => g.on);
+  const byId = {}; inv.forEach(i => byId[i.id] = i);
+
+  const bal = {}, basis = {};
+  inv.forEach(i => { bal[i.id] = num(i.val); basis[i.id] = num(i.cost, num(i.val)); });
+
+  const paid = {}, due = {}, firstShort = {};
+  goals.forEach(g => { paid[g.id]=0; due[g.id]=0; firstShort[g.id]=null; });
+
+  const years = []; let depletion = null, totalTax = 0;
+
+  for (let y = a.currentYear; y <= ey; y++){
+    const phase = y < ry ? "Accumulation" : "Retirement";
+    const opening = inv.reduce((t,i) => t + bal[i.id], 0);
+
+    const contrib = {};
+    inv.forEach(i => {
+      const stop = (i.until == null) ? ry - 1 : i.until;
+      contrib[i.id] = (y <= stop && i.add) ? num(i.add) * Math.pow(1 + num(i.step), y - a.currentYear) : 0;
+    });
+    const contribTotal = inv.reduce((t,i) => t + contrib[i.id], 0);
+
+    /* Growth is reported gross. A holding taxed as it accrues settles up the
+       same year, so its tax never compounds — and what survives has already
+       been taxed, which is why it joins the cost base below. */
+    const grow = {}, yearTax = {};
+    inv.forEach(i => {
+      let r = num(i.ret);
+      if (a.usePostRet && y >= ry) r = num(a.postRetReturn);
+      const g = (bal[i.id] + contrib[i.id]/2) * r;
+      grow[i.id] = g;
+      yearTax[i.id] = (i.taxWhen === "tax_at_year_end" && g > 0) ? g * num(i.taxRate) : 0;
+    });
+    const growthTotal = inv.reduce((t,i) => t + grow[i.id], 0);
+    const accrualTax = inv.reduce((t,i) => t + yearTax[i.id], 0);
+
+    const pre = {}, preBasis = {};
+    inv.forEach(i => {
+      pre[i.id] = bal[i.id] + contrib[i.id] + grow[i.id] - yearTax[i.id];
+      preBasis[i.id] = basis[i.id] + contrib[i.id]
+        + (i.taxWhen === "tax_at_year_end" ? grow[i.id] - yearTax[i.id] : 0);
+    });
+
+    /* Every withdrawal takes principal and gain in the same proportion as the
+       holding, so the gain fraction survives the draw untouched and can be
+       fixed once a year — only that fraction of what comes out is taxed. */
+    const gainFrac = {};
+    inv.forEach(i => gainFrac[i.id] = pre[i.id] > 0
+      ? Math.max(0, pre[i.id] - preBasis[i.id]) / pre[i.id] : 0);
+
+    const openIds = inv.filter(i => i.avail == null || y >= i.avail).map(i => i.id);
+    const wd = {}, wdTaxPer = {}; inv.forEach(i => { wd[i.id] = 0; wdTaxPer[i.id] = 0; });
+    const yearGoals = []; let shortfall = 0, wdTax = 0;
+    let exemptLeft = num(a.cgExempt);
+
+    /* Draw order: the lowest number goes first. Holdings sharing a number give
+       equal rupee amounts — not amounts proportional to their size — and when
+       one runs dry the others in that band cover what it could not. Locked
+       holdings are simply absent from openIds until their year arrives. */
+    const tiers = [];
+    const byPri = {};
+    openIds.forEach(id => { const p = num(byId[id].pri, 50); (byPri[p] = byPri[p] || []).push(id); });
+    Object.keys(byPri).map(Number).sort((p,q) => p - q).forEach(p => tiers.push(byPri[p]));
+
+    function split(G){
+      const per = {}; openIds.forEach(id => per[id] = 0);
+      if (G <= 0) return per;
+      let left = G;
+      for (const tier of tiers){
+        if (left <= 1e-9) break;
+        let pool = tier.filter(id => (pre[id] - wd[id]) > 1e-9);
+        while (pool.length && left > 1e-9){
+          const share = left / pool.length;
+          let used = 0; const next = [];
+          for (const id of pool){
+            const avail = pre[id] - wd[id] - per[id];
+            const take = Math.min(share, avail);
+            per[id] += take; used += take;
+            if (avail - take > 1e-9) next.push(id);
+          }
+          left -= used;
+          if (used <= 1e-12) break;          // nothing left to give in this band
+          pool = next;
+        }
+      }
+      return per;
+    }
+
+    /* On the way out, only holdings in the withdrawal category owe anything —
+       the year-end ones have already paid. A rate of 0 means exempt. */
+    function drawTax(id, gross, exLeft){
+      const i = byId[id];
+      if (gross <= 0 || i.taxWhen !== "tax_on_withdrawal") return {tax:0, ex:0};
+      const rate = num(i.taxRate);
+      if (rate <= 0) return {tax:0, ex:0};
+      const gain = gross * gainFrac[id];
+      const ex = Math.min(gain, Math.max(exLeft, 0));
+      return {tax: Math.max(0, gain - ex) * rate, ex};
+    }
+
+    function netOf(G){
+      const per = split(G), taxPer = {};
+      let tax = 0, ex = exemptLeft, gross = 0;
+      for (const id of openIds){
+        if (per[id] <= 0) continue;
+        const r = drawTax(id, per[id], ex);
+        taxPer[id] = r.tax;
+        tax += r.tax; ex -= r.ex; gross += per[id];
+      }
+      return {per, taxPer, tax, gross, net: gross - tax, exLeft: ex};
+    }
+
+    const demands = [];
+    goals.forEach(g => {
+      if (y < g.start || y > g.end) return;
+      const amt = num(g.amt) * Math.pow(1 + num(g.infl), y - a.currentYear);
+      if (amt > 0){ demands.push({g, amt}); due[g.id] += amt; }
+    });
+    demands.sort((x,z) => (x.g.ess === z.g.ess) ? x.g.start - z.g.start : (x.g.ess ? -1 : 1));
+
+    const anyTax = openIds.some(id => byId[id].taxWhen === "tax_on_withdrawal"
+      && num(byId[id].taxRate) > 0 && gainFrac[id] > 0);
+
+    demands.forEach(({g, amt}) => {
+      let pool = 0; openIds.forEach(id => pool += Math.max(pre[id] - wd[id], 0));
+      const cap = netOf(pool);
+      let res;
+      if (cap.net <= amt + 1e-6){
+        res = cap;                                  // everything left, still short
+      } else if (!anyTax){
+        res = netOf(amt);                           // no tax in the way
+      } else {
+        /* gross up: find the draw whose after-tax proceeds meet the goal */
+        let lo = 0, hi = pool;
+        for (let k = 0; k < 34; k++){
+          const mid = (lo + hi) / 2;
+          if (netOf(mid).net < amt) lo = mid; else hi = mid;
+        }
+        res = netOf(hi);
+      }
+      const take = Math.min(res.net, amt);
+      const short = Math.max(amt - res.net, 0);
+      if (short > 1e-6 && firstShort[g.id] == null) firstShort[g.id] = y;
+      shortfall += short; paid[g.id] += take;
+      openIds.forEach(id => { wd[id] += res.per[id]; wdTaxPer[id] += (res.taxPer[id] || 0); });
+      exemptLeft = res.exLeft;
+      wdTax += res.tax;
+      yearGoals.push({id:g.id, name:g.name, isRet:!!g.isRet, due:amt, paid:take, short, tax:res.tax});
+    });
+
+    const taxThisYear = accrualTax + wdTax;
+    totalTax += taxThisYear;
+
+    inv.forEach(i => {
+      const w = wd[i.id];
+      bal[i.id] = pre[i.id] - w;
+      basis[i.id] = Math.max(0, preBasis[i.id] - w * (1 - gainFrac[i.id]));
+    });
+    const closing = inv.reduce((t,i) => t + bal[i.id], 0);
+    const grossOut = inv.reduce((t,i) => t + wd[i.id], 0);
+    if (depletion == null && closing <= 1 && grossOut > 0) depletion = y;
+
+    const goalSpend = yearGoals.filter(g => !g.isRet).reduce((t,g) => t + g.paid, 0);
+    const retSpend  = yearGoals.filter(g =>  g.isRet).reduce((t,g) => t + g.paid, 0);
+
+    /* what the corpus still owes on gains it has not realised */
+    /* only the withdrawal category carries a liability into the future;
+       the year-end ones have settled everything they owe */
+    const embedded = inv.reduce((t,i) => i.taxWhen === "tax_on_withdrawal"
+      ? t + Math.max(0, bal[i.id] - basis[i.id]) * num(i.taxRate) : t, 0);
+
+    years.push({
+      year:y, age: a.currentAge + (y - a.currentYear), phase,
+      opening, contribution:contribTotal, growth:growthTotal,
+      withdrawal:goalSpend + retSpend, tax:taxThisYear,
+      outflow: goalSpend + retSpend + taxThisYear,
+      goalSpend, retSpend, shortfall, closing, embeddedTax: embedded,
+      goals: yearGoals,
+      byInv: inv.reduce((o,i) => (o[i.id] = {
+        opening: pre[i.id] - contrib[i.id] - grow[i.id] + yearTax[i.id],
+        basisOpen: preBasis[i.id] - contrib[i.id]
+          - ((i.taxWhen === "tax_at_year_end") ? grow[i.id] - yearTax[i.id] : 0),
+        contribution: contrib[i.id], growth: grow[i.id],
+        withdrawal: wd[i.id], closing: bal[i.id],
+        /* two different taxes, kept apart: one charged on this year's growth
+           whether or not anything was withdrawn, the other on the gain inside
+           what was sold */
+        taxYear: yearTax[i.id], taxDraw: wdTaxPer[i.id] || 0
+      }, o), {})
+    });
+  }
+
+  const goalStatus = goals.map(g => {
+    const d = due[g.id], p = paid[g.id];
+    let st = "Not scheduled";
+    if (d > 0) st = (p >= d - 1) ? "Funded" : (p <= 1 ? "Unfunded" : "Partial");
+    return {id:g.id, name:g.name, kind:g.kind, start:g.start, end:g.end, isRet:!!g.isRet,
+            ess:!!g.ess, due:d, paid:p, short:Math.max(d-p,0), status:st, firstShort:firstShort[g.id]};
+  });
+
+  const byYear = {}; years.forEach(y => byYear[y.year] = y);
+  const atRet = byYear[ry] ? byYear[ry].opening : (years[0] ? years[0].opening : 0);
+  const disc = num(a.postRetReturn);
+  let required = 0;
+  years.forEach(y => {
+    if (y.year < ry) return;
+    const d = y.goals.reduce((t,g) => t + g.due, 0);
+    required += d / Math.pow(1 + disc, y.year - ry + 0.5);
+  });
+  let peak = years[0] || null;
+  years.forEach(y => { if (!peak || y.closing > peak.closing) peak = y; });
+  const totalShort = years.reduce((t,y) => t + y.shortfall, 0);
+  const curCorpus = inv.reduce((t,i) => t + num(i.val), 0);
+  const embeddedNow = inv.reduce((t,i) => i.taxWhen === "tax_on_withdrawal"
+    ? t + Math.max(0, num(i.val) - num(i.cost, num(i.val))) * num(i.taxRate) : t, 0);
+
+  return {
+    years, goalStatus,
+    m: {
+      currentCorpus: curCorpus,
+      embeddedTaxNow: embeddedNow,
+      afterTaxNow: curCorpus - embeddedNow,
+      totalTax,
+      annualContribution: inv.reduce((t,i) => t + ((i.until==null || i.until>=a.currentYear) ? num(i.add) : 0), 0),
+      blendedReturn: curCorpus ? inv.reduce((t,i) => t + num(i.val)*num(i.ret), 0)/curCorpus : 0,
+      retirementYear: ry, endYear: ey,
+      corpusAtRetirement: atRet, requiredAtRetirement: required,
+      surplus: atRet - required,
+      finalCorpus: years.length ? years[years.length-1].closing : 0,
+      peakCorpus: peak ? peak.closing : 0, peakYear: peak ? peak.year : null,
+      depletionYear: depletion, totalShortfall: totalShort,
+      allFunded: goalStatus.every(g => g.status === "Funded" || g.status === "Not scheduled"),
+      totalGoalSpend: goalStatus.reduce((t,g) => t + g.due, 0),
+      depletionAge: depletion == null ? null : a.currentAge + (depletion - a.currentYear)
+    }
+  };
+}
+
+/* ---- src/engine/track.mjs ---- */
+/* Ported from the v37 planner page (_archive/v37_reference); the one change is Phase 4b's handling
+   of estimated rows, which is a no-op for any history without them. */
+
+/* History / on-track: planned vs actual across closed years. */
+function track(s){
+  const liveY = asOfYear(s);
+  const all = s.history.slice().sort((x,y) => num(x.year) - num(y.year));
+  /* The year still running holds a part-year figure. Measuring it against a
+     whole year of predicted growth would read as "behind" when nothing is
+     wrong, so it sits out of the comparison until it closes. */
+  const withEst = all.filter(r => num(r.year) < liveY);
+  /* Phase 4b: an estimated year is never evidence. It is left out of the
+     comparison entirely; with fewer than two RECORDED years the result is a
+     sketch — planned values for the chart's slope, no gap, no headline. */
+  const closed = withEst.filter(r => !r.estimated);
+  const bare = extra => Object.assign({
+    rows: all.map(r => Object.assign({}, r, {planned:null, gap:null, inProgress:num(r.year) === liveY})),
+    enough:false
+  }, extra || {});
+
+  const inv = s.investments.filter(i => i.on);
+  const tot = inv.reduce((t,i) => t + num(i.val), 0);
+  const assumed = tot ? inv.reduce((t,i) => t + num(i.val)*num(i.ret), 0)/tot : 0.08;
+
+  if (closed.length < 2){
+    if (withEst.length < 2) return bare();
+    const p = [num(withEst[0].actual)];
+    for (let k = 1; k < withEst.length; k++){
+      const prev = p[k-1], c = num(withEst[k].contribution);
+      p.push(prev + c + (prev + c/2) * assumed);
+    }
+    const at = {}; withEst.forEach((r,k) => at[r.id] = p[k]);
+    return {
+      rows: all.map(r => Object.assign({}, r, {planned: at[r.id] != null ? at[r.id] : null, gap:null,
+                                               inProgress: num(r.year) === liveY})),
+      enough:false, sketch:true, assumed
+    };
+  }
+  const run = rate => {
+    const out = [num(closed[0].actual)];
+    for (let k = 1; k < closed.length; k++){
+      const prev = out[k-1], c = num(closed[k].contribution);
+      out.push(prev + c + (prev + c/2) * rate);
+    }
+    return out;
+  };
+  const planned = run(assumed);
+  let lo = -0.5, hi = 0.6;
+  for (let k = 0; k < 160; k++){
+    const mid = (lo+hi)/2;
+    if (run(mid)[closed.length-1] < num(closed[closed.length-1].actual)) lo = mid; else hi = mid;
+  }
+  const implied = (lo+hi)/2;
+  const last = num(closed[closed.length-1].actual), lastP = planned[planned.length-1];
+  const at = {}; closed.forEach((r,k) => at[r.id] = planned[k]);
+  return {
+    rows: all.map(r => {
+      const p = at[r.id];
+      return Object.assign({}, r, p == null
+        ? {planned:null, gap:null, inProgress:num(r.year) === liveY}
+        : {planned:p, gap:num(r.actual) - p, inProgress:false});
+    }),
+    enough:true, assumed, implied, gap:last-lastP,
+    gapPct: lastP ? (last-lastP)/lastP : 0,
+    span: num(closed[closed.length-1].year) - num(closed[0].year)
+  };
+}
+
+/* ---- src/engine/required.mjs ---- */
+/* Ported from the v37 planner page (_archive/v37_reference). The ONLY place maths lives.
+   One deliberate change (v1.3.0): holdings still LOCKED in a year
+   keep their projected balance instead of being scaled with the rest — see
+   below. With no lock-ins the curve is identical to v37's. */
+
+/* The corpus needed at the start of each year for every remaining goal to be
+   met in full, ASSUMING planned contributions continue. Goal amt and holding
+   add are re-quoted to year t before each trial. */
+function requiredCurve(s, proj){
+  const years = proj.years, out = new Array(years.length).fill(null);
+  const live = s.investments.filter(i => i.on);
+  if (!live.length) return out;
+
+  const dueFrom = new Array(years.length + 1).fill(0);
+  for (let i = years.length - 1; i >= 0; i--)
+    dueFrom[i] = dueFrom[i+1] + years[i].goals.reduce((t,g) => t + g.due, 0);
+
+  const base = s.a.currentYear;
+  const p = clone(s);
+  p.investments = p.investments.filter(i => i.on);
+  const addBase = p.investments.map(i => num(i.add));
+  const goalBase = p.goals.map(g => ({amt: num(g.amt), infl: num(g.infl)}));
+
+  for (let i = 0; i < years.length; i++){
+    const y = years[i];
+    if (dueFrom[i] <= 0){ out[i] = 0; continue; }
+
+    p.a.currentYear = y.year;
+    p.a.currentAge  = y.age;
+    /* amounts are quoted in base-year money and escalate from currentYear,
+       so both goals and contributions are re-quoted to this year */
+    p.goals.forEach((g,k) => g.amt = goalBase[k].amt * Math.pow(1 + goalBase[k].infl, y.year - base));
+    p.investments.forEach((inv,k) => inv.add = addBase[k] * Math.pow(1 + num(inv.step), y.year - base));
+
+    /* A holding locked this year (NPS until 2048, say) cannot pay for anything
+       until it opens, so scaling it up with the rest asks the wrong question —
+       once the open holdings run dry the corpus would be "all NPS" and no
+       amount of it could fund the next year, leaving gaps and spikes in the
+       curve. Locked holdings are therefore held at their projected balance;
+       the search is over what the OPEN holdings need, in their own mix, and
+       the requirement is that plus the locked balances. */
+    const locked = live.map(inv => inv.avail != null && y.year < num(inv.avail));
+    const anyOpen = locked.some(l => !l);
+    let tot = 0, fixed = 0; const w = [], bf = [], hold = [];
+    live.forEach((inv,k) => {
+      const b = y.byInv[inv.id] || {opening:0, basisOpen:0};
+      const o = Math.max(b.opening, 0);
+      bf[k] = o > 0 ? Math.min(Math.max(b.basisOpen,0) / o, 1) : 1;
+      if (anyOpen && locked[k]){ hold[k] = o; fixed += o; w[k] = 0; }
+      else { hold[k] = null; w[k] = o; tot += o; }
+    });
+    const nFree = live.filter((inv,k) => hold[k] == null).length;
+    live.forEach((inv,k) => { if (hold[k] == null) w[k] = tot > 0 ? w[k]/tot : 1/nFree; });
+
+    const trial = C => {
+      for (let k = 0; k < p.investments.length; k++){
+        const v = hold[k] != null ? hold[k] : C * w[k];
+        p.investments[k].val = v;
+        p.investments[k].cost = v * bf[k];
+      }
+      return project(p).m.totalShortfall < 1;
+    };
+
+    let hi = (out[i+1] != null ? out[i+1] - fixed : 0) + dueFrom[i] + 1, guard = 0;
+    if (hi < 1) hi = dueFrom[i] + 1;
+    while (guard++ < 12 && !trial(hi)) hi *= 2;
+    if (!trial(hi)){ out[i] = null; continue; }
+    let lo = 0;
+    for (let k = 0; k < 13; k++){ const mid = (lo+hi)/2; if (trial(mid)) hi = mid; else lo = mid; }
+    out[i] = hi + fixed;
+  }
+  return out;
+}
+
+/* requiredCurve is a START-of-year figure; everything else is end-of-year.
+   Shift one year left so the band lines up with the chart. */
+function reqEndFor(years, curve){
+  const r = (curve && curve.length === years.length) ? curve : null;
+  return r ? years.map((y,i) => (i + 1 < r.length ? r[i+1] : 0)) : null;
+}
+
+/* ---- src/engine/solvers.mjs ---- */
+/* Ported verbatim from the v37 planner page (_archive/v37_reference). The ONLY place maths lives.
+   Do not edit without re-running tests/parity_html.mjs. */
+
+function survives(s){ return project(s).m.totalShortfall < 1; }
+
+/* Add (or remove) a lump sum today, spread across holdings in proportion to
+   their size. Money going in is new principal; money coming out takes
+   principal and gain in the same proportion as the holding, the same rule the
+   engine uses for every other withdrawal. */
+function withLump(s, delta){
+  const p = clone(s);
+  const on = p.investments.filter(i => i.on);
+  const tot = on.reduce((t,i) => t + num(i.val), 0);
+  if (tot <= 0) return p;
+  on.forEach(i => {
+    const v = num(i.val), c = num(i.cost, v), d = delta * (v / tot);
+    if (d >= 0){ i.val = v + d; i.cost = c + d; }
+    else {
+      const take = Math.min(-d, v);
+      const principalShare = v > 0 ? Math.min(c / v, 1) : 1;
+      i.val = v - take;
+      i.cost = Math.max(0, c - take * principalShare);
+    }
+  });
+  return p;
+}
+
+function solveAll(s){
+  const out = {retireAge:null, contribMult:null, sustainable:null, lumpToday:null};
+
+  /* the earliest retirement age that still funds everything — below the
+     current age this reads as slack, above it as the price of the gap */
+  for (let age = s.a.currentAge; age <= Math.min(s.a.lifeExpectancy, 80); age++){
+    const p = normalize(clone(s)); p.a.retirementAge = age; normalize(p);
+    if (survives(p)){ out.retireAge = age; break; }
+  }
+
+  const okMult = m => { const p = clone(s); p.investments.forEach(i => i.add = num(i.add)*m); return survives(p); };
+  if (okMult(1)){
+    /* already funded: find the SMALLEST multiple that still works, so the
+       difference from 1 is the slack in what is being put away */
+    if (okMult(0)) out.contribMult = 0;
+    else {
+      let lo = 0, hi = 1;
+      for (let k = 0; k < 44; k++){ const mid = (lo+hi)/2; if (okMult(mid)) hi = mid; else lo = mid; }
+      out.contribMult = hi;
+    }
+  } else if (okMult(20)){
+    let lo = 1, hi = 20;
+    for (let k = 0; k < 44; k++){ const mid = (lo+hi)/2; if (okMult(mid)) hi = mid; else lo = mid; }
+    out.contribMult = hi;
+  }
+
+  const retGoal = s.goals.find(g => g.isRet && g.on);
+  if (retGoal){
+    const okAmt = v => { const p = clone(s); p.goals.forEach(g => { if (g.isRet) g.amt = v; }); return survives(p); };
+    let lo = 0, hi = Math.max(num(retGoal.amt)*4, 1);
+    if (okAmt(hi)) out.sustainable = hi;
+    else { for (let k = 0; k < 44; k++){ const mid = (lo+hi)/2; if (okAmt(mid)) lo = mid; else hi = mid; } out.sustainable = lo; }
+  }
+
+  /* signed: positive is corpus you could take out today, negative is what
+     would have to go in for the plan to hold */
+  const corpus = s.investments.filter(i => i.on).reduce((t,i) => t + num(i.val), 0);
+  const okLump = d => survives(withLump(s, d));
+  if (okLump(0)){
+    if (okLump(-corpus)) out.lumpToday = corpus;
+    else {
+      let lo = 0, hi = corpus;
+      for (let k = 0; k < 40; k++){ const mid = (lo+hi)/2; if (okLump(-mid)) lo = mid; else hi = mid; }
+      out.lumpToday = lo;
+    }
+  } else {
+    const ceiling = corpus * 20 + 1e7;
+    if (okLump(ceiling)){
+      let lo = 0, hi = ceiling;
+      for (let k = 0; k < 40; k++){ const mid = (lo+hi)/2; if (okLump(mid)) hi = mid; else lo = mid; }
+      out.lumpToday = -hi;
+    }
+  }
+  return out;
+}
+
+/* ---- src/engine/attribution.mjs ---- */
+/* Drawn-from / tax attribution and the year-by-year export rows.
+   Ported from yearsTab() and exportCsv() in the v37 planner page (_archive/v37_reference); the
+   markup stays in ui/, the numbers and their order live here. */
+
+/* Holdings are labelled by bare name, with the owner appended only when two
+   enabled holdings share a name. */
+function holdLabeller(state){
+  const seen = {};
+  state.investments.filter(i => i.on).forEach(i => seen[i.name] = (seen[i.name] || 0) + 1);
+  return i => (seen[i.name] > 1 && i.owner) ? i.name + " (" + i.owner + ")" : i.name;
+}
+
+/* Every holding that either gave money or paid tax this year. A holding taxed
+   as it accrues pays on its growth even in a year nothing is taken from it. */
+function drawnFrom(state, y, holdLabel){
+  const label = holdLabel || holdLabeller(state);
+  return state.investments
+    .filter(i => {
+      const b = i.on && y.byInv[i.id]; if (!b) return false;
+      return b.withdrawal > 1 || (num(b.taxYear) + num(b.taxDraw)) > 1;
+    })
+    .map(i => {
+      const b = y.byInv[i.id];
+      return {id: i.id, name: label(i), amt: num(b.withdrawal), tax: num(b.taxYear) + num(b.taxDraw)};
+    })
+    .sort((a,b) => (b.amt - a.amt) || (b.tax - a.tax));
+}
+
+const CSV_HEADER = ["Year","Age","Phase","Opening","Invested","Growth","Goal spending",
+  "Living costs","Tax","Total out","Unfunded","Closing","Needed by year end","Surplus or short",
+  "Drawn from","Tax by holding","Events"];
+
+/* rq is the END-of-year required curve (reqEndFor), or null. */
+function yearRows(state, years, rq){
+  const rows = [CSV_HEADER.slice()];
+  years.forEach((y, yi) => rows.push([
+    y.year, y.age, y.phase, Math.round(y.opening), Math.round(y.contribution), Math.round(y.growth),
+    Math.round(y.goalSpend), Math.round(y.retSpend), Math.round(y.tax), Math.round(y.outflow), Math.round(y.shortfall),
+    Math.round(y.closing),
+    rq && rq[yi] != null ? Math.round(rq[yi]) : "",
+    rq && rq[yi] != null ? Math.round(y.closing - rq[yi]) : "",
+    state.investments.filter(i => i.on && y.byInv[i.id] && y.byInv[i.id].withdrawal > 1)
+      .sort((a,b) => y.byInv[b.id].withdrawal - y.byInv[a.id].withdrawal)
+      .map(i => i.name + (i.owner ? " (" + i.owner + ")" : "") + ": " + Math.round(y.byInv[i.id].withdrawal))
+      .join("; "),
+    state.investments.filter(i => i.on && y.byInv[i.id] && (num(y.byInv[i.id].taxYear) + num(y.byInv[i.id].taxDraw)) > 1)
+      .map(i => i.name + (i.owner ? " (" + i.owner + ")" : "") + ": "
+              + Math.round(num(y.byInv[i.id].taxYear) + num(y.byInv[i.id].taxDraw)))
+      .join("; "),
+    y.goals.map(g => g.name + (g.short > 1 ? " (short " + Math.round(g.short) + ")" : "")).join("; ")
+  ]));
+  return rows;
+}
+
+function toCsv(rows){
+  return rows.map(r => r.map(c => {
+    const s = String(c);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+  }).join(",")).join("\n");
+}
+
+/* ---- src/ui/format.js ---- */
+/* Lifted from the v37 planner page (_archive/v37_reference) on 2026-09-19; edited since. */
+const IN = new Intl.NumberFormat("en-IN", {maximumFractionDigits:0});
+function inr(n){ const s = IN.format(Math.round(Math.abs(n))); return (n<0?"−₹":"₹")+s; }
+function short(n){
+  const a = Math.abs(n), sg = n<0?"−":"";
+  if (a >= 1e7) return sg+"₹"+(a/1e7).toFixed(a/1e7>=100?0:2)+" cr";
+  if (a >= 1e5) return sg+"₹"+(a/1e5).toFixed(a/1e5>=100?0:1)+" L";
+  if (a >= 1000) return sg+"₹"+IN.format(Math.round(a));
+  return sg+"₹"+Math.round(a);
+}
+function pct(x, d){ return (x*100).toFixed(d===undefined?1:d)+"%"; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+const MONTHS = ["January","February","March","April","May","June",
+                "July","August","September","October","November","December"];
+const MON3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function dateLong(v){
+  const p = String(v).split("-");
+  return Number(p[2]) + " " + MONTHS[Number(p[1])-1] + " " + p[0];
+}
+function dateShort(v){
+  const p = String(v).split("-");
+  return Number(p[2]) + " " + MON3[Number(p[1])-1] + " " + p[0];
+}
+function asOfLabel(s){ return dateLong(normDate(s.a.asOf)); }
+
+/* ---- src/storage/files.js ---- */
+/* ============================================================== storage
+   The file is the plan. The page keeps it in memory and in a file, nowhere
+   else: no localStorage, no IndexedDB, no draft, no silent restore. The only
+   two moments anything moves are Load and Save.
+
+   What the browser supports decides how Save works:
+
+     Chrome / Edge (File System Access)
+                               1. folder picker → writes goal_plan.json there
+                                  and keeps the copy it replaced as
+                                  backups/goal_plan_<stamp>.json (last 10)
+                               2. if the browser refuses a folder: "Save as…"
+                                  picker; the replaced copy is downloaded
+     Safari / Firefox          download goal_plan.json
+
+   Load is the same everywhere: an ordinary file input, .json or legacy .js.
+
+   Chrome remembers the last folder per picker `id` by itself, so the page
+   stores nothing to make the second Save land in the same place.          */
+
+const PLAN_FILE = "goal_plan.json";
+const BACKUP_DIR = "backups";
+const KEEP_BACKUPS = 10;
+const PICKER_ID = "goal_planner";
+
+/* Hands a file to the user as a normal browser download. */
+function offerDownload(filename, text, mime){
+  return Promise.resolve(linkDownload(filename, text, mime)
+    ? {ok:true, how:"link"} : {ok:false, error:"Could not start the download."});
+}
+
+function linkDownload(filename, text, mime){
+  try {
+    const url = URL.createObjectURL(new Blob([text], {type:(mime || "application/json") + ";charset=utf-8"}));
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    return true;
+  } catch(e){ return false; }
+}
+
+function saveMode(){
+  if (typeof window.showDirectoryPicker === "function") return "folder";
+  if (typeof window.showSaveFilePicker === "function") return "file";
+  return "download";
+}
+
+const isAbort = e => e && (e.name === "AbortError");
+
+/* ------------------------------------------------------------ load */
+/* Resolves {ok, loaded, name, kind} or {ok:false, error}. Nothing is adopted
+   here: the caller checks it and decides. */
+function readPlanFile(file){
+  return new Promise(resolve => {
+    const fr = new FileReader();
+    fr.onerror = () => resolve({ok:false, error:"Could not read that file."});
+    fr.onload = () => {
+      let loaded;
+      try { loaded = parsePlanText(fr.result); }
+      catch(e){ resolve({ok:false, error:`${file.name} is not a plan file (it is not valid JSON).`}); return; }
+      if (!looksLikePlan(loaded)){ resolve({ok:false, error:`${file.name} does not look like a plan — no holdings or goals in it.`}); return; }
+      resolve({ok:true, loaded, text: fr.result, name:file.name, kind: /\.json$/i.test(file.name) ? "json" : "js"});
+    };
+    fr.readAsText(file);
+  });
+}
+
+/* ------------------------------------------------------------ save */
+async function readText(fileHandle){
+  try { const f = await fileHandle.getFile(); return f.size ? await f.text() : ""; }
+  catch(e){ return ""; }
+}
+async function writeText(fileHandle, text){
+  const w = await fileHandle.createWritable();
+  await w.write(text);
+  await w.close();
+}
+
+/* one line describing a plan file's contents, for the replace question */
+function describePlanText(text){
+  try {
+    const p = parsePlanText(text);
+    const on = (p.investments || []).filter(i => i.on !== false);
+    const tot = on.reduce((t,i) => t + num(i.val), 0);
+    return `${on.length} holding${on.length === 1 ? "" : "s"}, ${(p.goals || []).length} goals, ${short(tot)}`
+      + (p.savedAt ? `, saved ${new Date(p.savedAt).toLocaleString("en-IN", {dateStyle:"medium", timeStyle:"short"})}` : "");
+  } catch(e){ return "not readable as a plan"; }
+}
+
+async function exists(dir, name){
+  try { await dir.getFileHandle(name); return true; } catch(e){ return false; }
+}
+
+/* Keep the newest KEEP_BACKUPS timestamped files; never touch anything else. */
+async function pruneBackups(dir){
+  const names = [];
+  for await (const [name, h] of dir.entries())
+    if (h.kind === "file" && /^goal_plan_\d{8}-\d{6}(-\d+)?\.json$/.test(name)) names.push(name);
+  names.sort();
+  const drop = names.slice(0, Math.max(0, names.length - KEEP_BACKUPS));
+  for (const n of drop){ try { await dir.removeEntry(n); } catch(e){ /* leave it */ } }
+  return drop.length;
+}
+
+/* opts.confirmReplace(where, summary) → Promise<boolean>. Asked only when the
+   file about to be replaced is not the one this plan came from — judged by
+   content (opts.isKnown), since a file input never reveals its folder. */
+async function savePlanText(text, opts){
+  const mode = saveMode();
+  const stamp = backupName(new Date());
+
+  if (mode === "folder"){
+    let dir;
+    try { dir = await window.showDirectoryPicker({id: PICKER_ID, mode: "readwrite", startIn: "documents"}); }
+    catch(e){
+      if (isAbort(e)) return {ok:false, cancelled:true};
+      /* SecurityError/NotAllowedError: this page may not use a folder here.
+         Fall through to the single-file route rather than give up. */
+      return savePlanFile(text, opts, stamp, "Chrome would not let this page use a folder, so it saved a single file instead.");
+    }
+    let target, existing = "";
+    try { target = await dir.getFileHandle(PLAN_FILE); existing = await readText(target); }
+    catch(e){ target = null; }
+    if (existing && opts && opts.confirmReplace && !opts.isKnown(existing)){
+      const go = await opts.confirmReplace(`${dir.name}/${PLAN_FILE}`, describePlanText(existing));
+      if (!go) return {ok:false, cancelled:true};
+    }
+    let backup = null, pruned = 0;
+    if (existing && existing.trim() !== text.trim()){
+      const bdir = await dir.getDirectoryHandle(BACKUP_DIR, {create: true});
+      /* two saves inside one second must not overwrite each other's backup */
+      let name = stamp;
+      for (let k = 1; await exists(bdir, name); k++) name = stamp.replace(/\.json$/, `-${k}.json`);
+      const bh = await bdir.getFileHandle(name, {create: true});
+      await writeText(bh, existing);
+      backup = `${BACKUP_DIR}/${name}`;
+      pruned = await pruneBackups(bdir);
+    }
+    if (!target) target = await dir.getFileHandle(PLAN_FILE, {create: true});
+    await writeText(target, text);
+    return {ok:true, where: `${dir.name}/${PLAN_FILE}`, source: dir.name, backup, pruned, mode};
+  }
+
+  if (mode === "file") return savePlanFile(text, opts, stamp, null);
+
+  const r = await offerDownload(PLAN_FILE, text, "application/json");
+  if (!r.ok) return r.declined ? {ok:false, cancelled:true} : {ok:false, error:r.error};
+  return {ok:true, where: `${PLAN_FILE} (downloaded)`, source: null, backup: null, mode};
+}
+
+async function savePlanFile(text, opts, stamp, note){
+  let fh;
+  try {
+    fh = await window.showSaveFilePicker({id: PICKER_ID, suggestedName: PLAN_FILE, startIn: "documents",
+      types: [{description: "Goal plan", accept: {"application/json": [".json"]}}]});
+  } catch(e){
+    if (isAbort(e)) return {ok:false, cancelled:true};
+    const r = await offerDownload(PLAN_FILE, text, "application/json");
+    return r.ok ? {ok:true, where:`${PLAN_FILE} (downloaded)`, source:null, backup:null, mode:"download",
+                   note:"This browser would not open a save dialog here, so the plan was downloaded."}
+                : {ok:false, error:r.error || "Could not save."};
+  }
+  const existing = await readText(fh);
+  if (existing && opts && opts.confirmReplace && !opts.isKnown(existing)){
+    const go = await opts.confirmReplace(fh.name, describePlanText(existing));
+    if (!go) return {ok:false, cancelled:true};
+  }
+  let backup = null;
+  if (existing && existing.trim() !== text.trim()){
+    /* A file grant does not reach the file's neighbours, so the replaced copy
+       cannot go beside it. Say where it really went. */
+    const r = await offerDownload(stamp, existing, "application/json");
+    if (r.ok) backup = `${stamp} in your Downloads folder`;
+  }
+  await writeText(fh, text);
+  return {ok:true, where: fh.name, source: fh.name, backup, mode:"file", note};
+}
+
+/* ---- src/ui/charts.js ---- */
+/* Lifted from the v37 planner page (_archive/v37_reference) on 2026-09-19; edited since. */
+/* ================================================================ charts */
+const CW = 1000, PAD = {l:66, r:20, t:16, b:34};
+
+function svgEl(w,h,inner){
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" role="img">${inner}</svg>`;
+}
+function niceTicks(min, max, count){
+  const span = (max - min) || 1;
+  const raw = span / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(Math.abs(raw))));
+  const norm = raw / mag;
+  const step = (norm >= 5 ? 10 : norm >= 2 ? 5 : norm >= 1 ? 2 : 1) * mag;
+  const out = []; let v = Math.ceil(min/step)*step;
+  while (v <= max + step*0.01){ out.push(v); v += step; }
+  return out;
+}
+
+/* ---- corpus trajectory: recorded history, then projection --------------- */
+function corpusChart(){
+  const {years, m} = MODEL.proj, H = 350;
+  const hist = state.history.slice().sort((a,b)=>a.year-b.year)
+    .filter(r => r.year <= state.a.currentYear);
+  const x0 = Math.min(hist.length ? hist[0].year : state.a.currentYear, state.a.currentYear);
+  const x1 = m.endYear;
+  const pts = years.map(y => ({year:y.year, v:y.closing}));
+  const req = reqEndFor(years, reqCurve);
+  const all = pts.map(p=>p.v).concat(hist.map(r=>num(r.actual))).concat([0])
+    .concat(req ? req.filter(v => v != null) : []);
+  const vmax = Math.max.apply(null, all), vmin = Math.min(0, Math.min.apply(null, all));
+  const ticks = niceTicks(vmin, vmax, 5);
+  const top = Math.max(vmax, ticks[ticks.length-1]);
+
+  const X = yr => PAD.l + (yr - x0) / Math.max(x1 - x0, 1) * (CW - PAD.l - PAD.r);
+  const Y = v  => PAD.t + (1 - (v - vmin) / Math.max(top - vmin, 1)) * (H - PAD.t - PAD.b);
+
+  /* The band between what is projected and what is needed, clipped twice:
+     green where the projection sits above the requirement, red where below.
+     Clipping at the requirement line makes the crossings exact. */
+  /* Drawn per unbroken run of years: a year the search could not price (it
+     returns null) breaks the line there instead of hiding all of it. */
+  let band = "";
+  if (req){
+    const runs = []; let cur = [];
+    years.forEach((y,i) => { if (req[i] != null) cur.push(i); else { if (cur.length) runs.push(cur); cur = []; } });
+    if (cur.length) runs.push(cur);
+    const yTop = PAD.t.toFixed(1), yBot = (H - PAD.b).toFixed(1);
+    runs.forEach((run, r) => {
+      const aPts = run.map(i => `${X(years[i].year).toFixed(1)},${Y(years[i].closing).toFixed(1)}`);
+      const rPts = run.map(i => `${X(years[i].year).toFixed(1)},${Y(req[i]).toFixed(1)}`);
+      if (run.length > 1){
+        const region = `M${aPts.join("L")}L${rPts.slice().reverse().join("L")}Z`;
+        const x0p = X(years[run[0]].year).toFixed(1), x1p = X(years[run[run.length-1]].year).toFixed(1);
+        band += `<defs>
+          <clipPath id="reqAbove${r}"><polygon points="${rPts.join(" ")} ${x1p},${yTop} ${x0p},${yTop}"/></clipPath>
+          <clipPath id="reqBelow${r}"><polygon points="${rPts.join(" ")} ${x1p},${yBot} ${x0p},${yBot}"/></clipPath>
+        </defs>
+        <g clip-path="url(#reqAbove${r})"><path d="${region}" fill="var(--good)" opacity="0.16"/></g>
+        <g clip-path="url(#reqBelow${r})"><path d="${region}" fill="var(--critical)" opacity="0.16"/></g>`;
+      }
+      band += run.length > 1
+        ? `<path d="M${rPts.join("L")}" fill="none" stroke="var(--c-need)" stroke-width="2.25" stroke-dasharray="7 5" stroke-linejoin="round"/>`
+        : `<circle cx="${rPts[0].split(",")[0]}" cy="${rPts[0].split(",")[1]}" r="3" fill="var(--c-need)"/>`;
+    });
+  }
+
+  let g = "";
+  ticks.forEach(t => {
+    g += `<line x1="${PAD.l}" y1="${Y(t).toFixed(1)}" x2="${CW-PAD.r}" y2="${Y(t).toFixed(1)}" stroke="var(--grid)" stroke-width="1"/>`;
+    g += `<text x="${PAD.l-9}" y="${(Y(t)+4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${short(t)}</text>`;
+  });
+
+  const step = (x1 - x0) > 30 ? 5 : ((x1-x0) > 14 ? 2 : 1);
+  for (let yr = Math.ceil(x0/step)*step; yr <= x1; yr += step){
+    g += `<text x="${X(yr).toFixed(1)}" y="${H-13}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${yr}</text>`;
+  }
+
+  const area = "M" + pts.map(p => `${X(p.year).toFixed(1)},${Y(p.v).toFixed(1)}`).join("L")
+    + `L${X(pts[pts.length-1].year).toFixed(1)},${Y(Math.max(vmin,0)).toFixed(1)}L${X(pts[0].year).toFixed(1)},${Y(Math.max(vmin,0)).toFixed(1)}Z`;
+  const line = "M" + pts.map(p => `${X(p.year).toFixed(1)},${Y(p.v).toFixed(1)}`).join("L");
+
+  // Marker labels sit on a backing chip so they stay readable wherever the
+  // curve happens to run.
+  let marks = "";
+  const mark = (yr, color, label) => {
+    if (yr < x0 || yr > x1) return "";
+    const xx = X(yr), right = yr > (x0 + x1) / 2;
+    const w = label.length * 6.2 + 12;
+    const bx = right ? xx - 5 - w : xx + 5;
+    return `<line x1="${xx.toFixed(1)}" y1="${PAD.t}" x2="${xx.toFixed(1)}" y2="${H-PAD.b}" stroke="${color}" stroke-width="1.5" stroke-dasharray="4 4"/>`
+      + `<rect x="${bx.toFixed(1)}" y="${PAD.t+1}" width="${w.toFixed(1)}" height="16" rx="4" fill="var(--surface)" opacity="0.9"/>`
+      + `<text x="${(bx+w/2).toFixed(1)}" y="${PAD.t+12.5}" text-anchor="middle" font-size="11" font-weight="600" fill="${color}">${esc(label)}</text>`;
+  };
+  marks += mark(m.retirementYear, "var(--c-ret)", "Retire · " + m.retirementYear);
+  /* the red marker is the first year the goals are not met — not the year the
+     corpus hits zero, which a locked holding can push years later */
+  const firstShort = years.find(y => y.shortfall > 1);
+  if (firstShort) marks += mark(firstShort.year, "var(--critical)", "Runs short · " + firstShort.year);
+
+  // One-time goals: a tick on the baseline, label ABOVE it so it never
+  // collides with the year axis; close labels alternate into a second lane.
+  let ev = "";
+  const evs = state.goals
+    .filter(g2 => g2.on && !g2.isRet && g2.kind === "onetime" && g2.start >= x0 && g2.start <= x1)
+    .sort((p,q) => p.start - q.start);
+  let lastX = -1e9, lane = 0;
+  evs.forEach(g2 => {
+    const xx = X(g2.start), yy = Y(0);
+    lane = (xx - lastX < 116) ? (lane + 1) % 2 : 0;
+    lastX = xx;
+    const name = g2.name.length > 17 ? g2.name.slice(0,16) + "…" : g2.name;
+    const near = CW - PAD.r - 70;
+    const anchor = xx < PAD.l + 62 ? "start" : (xx > near ? "end" : "middle");
+    ev += `<line x1="${xx.toFixed(1)}" y1="${(yy-6).toFixed(1)}" x2="${xx.toFixed(1)}" y2="${(yy+6).toFixed(1)}" stroke="var(--c-goal)" stroke-width="2.5"/>`;
+    ev += `<text x="${xx.toFixed(1)}" y="${(yy - 12 - lane*13).toFixed(1)}" text-anchor="${anchor}" font-size="10.5" fill="var(--c-goal)">${esc(name)}</text>`;
+  });
+
+  let histPath = "";
+  if (hist.length > 1){
+    histPath = `<path d="M${hist.map(r => `${X(r.year).toFixed(1)},${Y(num(r.actual)).toFixed(1)}`).join("L")}" fill="none" stroke="var(--c-rec)" stroke-width="2.75" stroke-linejoin="round"/>`;
+    hist.forEach(r => { histPath += `<circle cx="${X(r.year).toFixed(1)}" cy="${Y(num(r.actual)).toFixed(1)}" r="3.5" fill="var(--ink-2)"/>`; });
+  }
+
+  const todayX = X(state.a.currentYear).toFixed(1);
+  const zeroY = Y(0).toFixed(1);
+
+  const inner = `
+    <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="var(--c-proj)" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="var(--c-proj)" stop-opacity="0.02"/>
+    </linearGradient></defs>
+    ${g}
+    <line x1="${PAD.l}" y1="${zeroY}" x2="${CW-PAD.r}" y2="${zeroY}" stroke="var(--axis)" stroke-width="1.5"/>
+    <path d="${area}" fill="url(#cg)"/>
+    ${band}
+    ${marks}
+    <path d="${line}" fill="none" stroke="var(--c-proj)" stroke-width="2.75" stroke-linejoin="round"/>
+    ${histPath}
+    ${ev}
+    <line x1="${todayX}" y1="${PAD.t}" x2="${todayX}" y2="${H-PAD.b}" stroke="var(--ink-2)" stroke-width="1" stroke-dasharray="2 3" opacity="0.55"/>
+    <g id="cx" style="opacity:0">
+      <line y1="${PAD.t}" y2="${H-PAD.b}" stroke="var(--ink-2)" stroke-width="1"/>
+      <circle r="5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>
+    </g>
+    <rect id="chit" x="${PAD.l}" y="${PAD.t}" width="${CW-PAD.l-PAD.r}" height="${H-PAD.t-PAD.b}" fill="transparent"/>`;
+
+  return {svg: svgEl(CW, H, inner), X, Y, pts, x0, x1, H};
+}
+
+/* ---- money in / money out: inflows above the line, outflows below ------- */
+function flowChart(){
+  const years = MODEL.proj.years, H = 320;
+  const up = years.map(y => y.contribution + y.growth);
+  /* what should have gone out but could not is drawn too, as an empty dashed
+     bar: without it a year with nothing left to pay from looks like a year
+     with nothing to pay */
+  const dn = years.map(y => y.outflow + (y.shortfall > 1 ? y.shortfall : 0));
+  const vmax = Math.max(1, Math.max.apply(null, up));
+  const vmin = -Math.max(1, Math.max.apply(null, dn));
+  const ticks = niceTicks(vmin, vmax, 6);
+  const lo = Math.min(vmin, ticks[0]), hi = Math.max(vmax, ticks[ticks.length-1]);
+  const X = i => PAD.l + (i + 0.5) / years.length * (CW - PAD.l - PAD.r);
+  const Y = v => PAD.t + (1 - (v - lo) / Math.max(hi - lo, 1)) * (H - PAD.t - PAD.b);
+  const bw = Math.max(4, (CW - PAD.l - PAD.r) / years.length - 4);
+
+  let g = "";
+  ticks.forEach(t => {
+    g += `<line x1="${PAD.l}" y1="${Y(t).toFixed(1)}" x2="${CW-PAD.r}" y2="${Y(t).toFixed(1)}" stroke="var(--grid)" stroke-width="1"/>`;
+    // signed ticks: positive above the line is money in, negative below is money out
+    g += `<text x="${PAD.l-9}" y="${(Y(t)+4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${t===0?"₹0":short(t)}</text>`;
+  });
+
+  // 2px surface gap BETWEEN stacked segments; the segment touching the
+  // baseline stays anchored to it.
+  let bars = "";
+  years.forEach((y,i) => {
+    const cx = X(i) - bw/2;
+    let acc = 0, first = true;
+    [["contribution","var(--s1)"],["growth","var(--s2)"]].forEach(([k,c]) => {
+      const v = y[k]; if (v <= 0) return;
+      const yTop = Y(acc + v), yBot = Y(acc);
+      const gap = first ? 0 : 2;
+      const h = Math.max(yBot - yTop - gap, 0.8);
+      bars += `<rect x="${cx.toFixed(1)}" y="${yTop.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${c}" rx="2"/>`;
+      acc += v; first = false;
+    });
+    acc = 0; first = true;
+    [["goalSpend","var(--s3)"],["retSpend","var(--s4)"],["tax","var(--s5)"]].forEach(([k,c]) => {
+      const v = y[k]; if (v <= 0) return;
+      const yTop = Y(-acc), yBot = Y(-(acc + v));
+      const gap = first ? 0 : 2;
+      const h = Math.max(yBot - yTop - gap, 0.8);
+      bars += `<rect x="${cx.toFixed(1)}" y="${(yTop + gap).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${c}" rx="2"/>`;
+      acc += v; first = false;
+    });
+    if (y.shortfall > 1){
+      const yTop = Y(-acc), yBot = Y(-(acc + y.shortfall));
+      const gap = first ? 0 : 2;
+      const h = Math.max(yBot - yTop - gap - 1, 0.8);
+      bars += `<rect x="${(cx + 0.75).toFixed(1)}" y="${(yTop + gap + 0.5).toFixed(1)}" width="${(bw - 1.5).toFixed(1)}" height="${h.toFixed(1)}" fill="var(--crit-wash)" stroke="var(--critical)" stroke-width="1.25" stroke-dasharray="3 2" rx="2"/>`;
+    }
+  });
+
+  const step = years.length > 30 ? 5 : 2;
+  let xl = "";
+  years.forEach((y,i) => {
+    if (y.year % step === 0)
+      xl += `<text x="${X(i).toFixed(1)}" y="${H-13}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${y.year}</text>`;
+  });
+
+  const rx = X(years.findIndex(y => y.year === MODEL.proj.m.retirementYear));
+  const retLine = rx > 0 ? `<line x1="${(rx-bw/2-2).toFixed(1)}" y1="${PAD.t}" x2="${(rx-bw/2-2).toFixed(1)}" y2="${H-PAD.b}" stroke="var(--s4)" stroke-width="1.5" stroke-dasharray="4 4"/>` : "";
+
+  const inner = `${g}${retLine}${bars}
+    <line x1="${PAD.l}" y1="${Y(0).toFixed(1)}" x2="${CW-PAD.r}" y2="${Y(0).toFixed(1)}" stroke="var(--axis)" stroke-width="1.5"/>
+    ${xl}
+    <rect id="fhit" x="${PAD.l}" y="${PAD.t}" width="${CW-PAD.l-PAD.r}" height="${H-PAD.t-PAD.b}" fill="transparent"/>`;
+  return {svg: svgEl(CW, H, inner), X, years, H};
+}
+
+/* ---- history: what actually happened vs what the plan assumed ---------- */
+function histChart(){
+  const t = MODEL.trk; if (!t.enough && !t.sketch) return null;
+  const H = 260, rows = t.rows;
+  const vals = rows.map(r => num(r.actual)).concat(rows.filter(r => r.planned != null).map(r => r.planned));
+  const vmax = Math.max.apply(null, vals), vmin = Math.min.apply(null, vals);
+  const pad = (vmax - vmin) * 0.15 || vmax * 0.1 || 1;
+  const lo = Math.max(0, vmin - pad), hi = vmax + pad;
+  const ticks = niceTicks(lo, hi, 4);
+  const X = i => PAD.l + (rows.length === 1 ? 0.5 : i/(rows.length-1)) * (CW - PAD.l - PAD.r);
+  const Y = v => PAD.t + (1 - (v - lo)/Math.max(hi - lo, 1)) * (H - PAD.t - PAD.b);
+  let g = "";
+  ticks.forEach(v => {
+    g += `<line x1="${PAD.l}" y1="${Y(v).toFixed(1)}" x2="${CW-PAD.r}" y2="${Y(v).toFixed(1)}" stroke="var(--grid)"/>`;
+    g += `<text x="${PAD.l-9}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${short(v)}</text>`;
+  });
+  rows.forEach((r,i) => {
+    g += `<text x="${X(i).toFixed(1)}" y="${H-13}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${r.year}</text>`;
+  });
+  const pth = (key, color, dash) => {
+    /* an estimated year is not a reading: the solid line joins recorded values only */
+    const pts = rows.map((r,i) => ((key === "actual" && !r.estimated) || (key !== "actual" && r.planned != null))
+      ? `${X(i).toFixed(1)},${Y(key === "actual" ? num(r.actual) : r.planned).toFixed(1)}` : null).filter(Boolean);
+    return pts.length < 2 ? "" :
+      `<path d="M${pts.join("L")}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"${dash?` stroke-dasharray="${dash}"`:""}/>`;
+  };
+  let dots = "";
+  /* the estimate joins the record with a dashed line and a hollow, dashed ring */
+  rows.forEach((r,i) => {
+    if (!r.estimated || i + 1 >= rows.length) return;
+    dots += `<path d="M${X(i).toFixed(1)},${Y(num(r.actual)).toFixed(1)}L${X(i+1).toFixed(1)},${Y(num(rows[i+1].actual)).toFixed(1)}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-dasharray="3 4"/>`;
+  });
+  rows.forEach((r,i) => {
+    if (r.estimated){
+      dots += `<circle cx="${X(i).toFixed(1)}" cy="${Y(num(r.actual)).toFixed(1)}" r="5" fill="var(--surface)" stroke="var(--s1)" stroke-width="2" stroke-dasharray="2.5 2"/>`
+        + `<text x="${X(i).toFixed(1)}" y="${(Y(num(r.actual))+20).toFixed(1)}" text-anchor="middle" font-size="10.5" fill="var(--muted)">estimate</text>`;
+      return;
+    }
+    /* the year still running is drawn hollow — it is a reading, not a result */
+    dots += r.inProgress
+      ? `<circle cx="${X(i).toFixed(1)}" cy="${Y(num(r.actual)).toFixed(1)}" r="4" fill="var(--surface)" stroke="var(--s1)" stroke-width="2.5"/>`
+      : `<circle cx="${X(i).toFixed(1)}" cy="${Y(num(r.actual)).toFixed(1)}" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>`;
+    if (r.planned != null)
+      dots += `<circle cx="${X(i).toFixed(1)}" cy="${Y(r.planned).toFixed(1)}" r="3.5" fill="var(--muted)" stroke="var(--surface)" stroke-width="2"/>`;
+  });
+  const last = rows[rows.length-1];
+  const lbl = `<text x="${(X(rows.length-1)-6).toFixed(1)}" y="${(Y(num(last.actual))-12).toFixed(1)}" text-anchor="end" font-size="11.5" font-weight="600" fill="var(--s1)">${short(num(last.actual))}</text>`;
+  return svgEl(CW, H, g + pth("planned","var(--muted)","5 4") + pth("actual","var(--s1)") + dots + lbl);
+}
+
+/* ---- src/ui/panels.js ---- */
+/* Lifted from the v37 planner page (_archive/v37_reference) on 2026-09-19; edited since. */
+/* ================================================================ render */
+/* The first year the goals are not met in full. This, not the year the corpus
+   reaches zero, is when the money "runs short": a holding locked until later
+   (NPS, say) can keep the corpus above zero for years while nothing can be
+   paid out of it. */
+function shortFrom(){
+  const y = MODEL.proj.years.find(r => r.shortfall > 1);
+  return y ? {year: y.year, age: y.age} : null;
+}
+/* money sitting in holdings that are still locked at the end of a year */
+function lockedAt(year){
+  const y = MODEL.proj.years.find(r => r.year === year);
+  if (!y) return {total: 0, names: [], until: null};
+  const hs = state.investments.filter(i => i.on && i.avail != null && num(i.avail) > year
+    && y.byInv[i.id] && y.byInv[i.id].closing > 1);
+  return {total: hs.reduce((t,i) => t + y.byInv[i.id].closing, 0), names: hs.map(i => i.name),
+          until: hs.length ? Math.min.apply(null, hs.map(i => num(i.avail))) : null};
+}
+
+function verdict(){
+  const m = MODEL.proj.m, sf = shortFrom();
+  const el = document.getElementById("verdictPill");
+  if (m.allFunded){
+    el.innerHTML = `<span class="verdict-pill pill-ok"><span class="dot"></span>Every goal funded to age ${state.a.lifeExpectancy}</span>`;
+  } else if (sf){
+    el.innerHTML = `<span class="verdict-pill pill-bad"><span class="dot"></span>Money runs short at age ${sf.age} &middot; ${sf.year}</span>`;
+  } else {
+    el.innerHTML = `<span class="verdict-pill pill-bad"><span class="dot"></span>${short(m.totalShortfall)} of goals unfunded</span>`;
+  }
+}
+
+function tiles(){
+  const m = MODEL.proj.m;
+  const sf = m.allFunded ? null : shortFrom();
+  const runsTo = sf ? `age ${sf.age}` : `age ${state.a.lifeExpectancy}+`;
+  return `<div class="tiles">
+    <div class="tile"><div class="k">Corpus today</div><div class="v">${short(m.currentCorpus)}</div>
+      <div class="m">${m.embeddedTaxNow > 0
+        ? short(m.afterTaxNow) + " after the tax owed on gains"
+        : inr(m.annualContribution) + " added each year"}</div></div>
+    <div class="tile"><div class="k">At retirement &middot; ${m.retirementYear}</div><div class="v">${short(m.corpusAtRetirement)}</div>
+      <div class="m">needs ${short(m.requiredAtRetirement)} for all goals</div></div>
+    <div class="tile"><div class="k">Peak corpus</div><div class="v">${short(m.peakCorpus)}</div>
+      <div class="m">in ${m.peakYear}</div></div>
+    <div class="tile"><div class="k">${sf ? "Money runs short at" : "Money lasts to"}</div><div class="v ${sf?"bad":"good"}">${runsTo}</div>
+      <div class="m">${sf ? short(m.totalShortfall)+" of spending unmet" : "with "+short(m.finalCorpus)+" left over"}</div></div>
+  </div>`;
+}
+
+function banner(){
+  const m = MODEL.proj.m;
+  if (m.allFunded){
+    return `<div class="banner ok"><div class="icon">✓</div><div>
+      <h2>The plan holds all the way to age ${state.a.lifeExpectancy}</h2>
+      <p>Every goal is paid in full and ${short(m.finalCorpus)} is still left at the end. Retirement at ${state.a.retirementAge} works on these assumptions.</p>
+    </div></div>`;
+  }
+  const worst = MODEL.proj.goalStatus.filter(g => g.status !== "Funded" && g.status !== "Not scheduled");
+  const names = worst.map(g => g.name).join(", ");
+  const sf = shortFrom();
+  const lk = sf ? lockedAt(sf.year) : {total: 0};
+  const lockNote = lk.total > 1
+    ? ` ${short(lk.total)} is still there that year, but it is locked in ${esc(lk.names.join(", "))} until ${lk.until}.` : "";
+  return `<div class="banner"><div class="icon">⚠</div><div>
+    <h2>${sf ? `The money runs short at age ${sf.age}, in ${sf.year}` : "Some goals go unfunded"}</h2>
+    <p>Retiring at ${state.a.retirementAge} leaves ${short(m.corpusAtRetirement)} against the ${short(m.requiredAtRetirement)} these goals actually need &mdash; a gap of ${short(Math.abs(m.surplus))}.
+    ${names ? `Falls short on: <b>${esc(names)}</b>.` : ""} Total unmet spending over the plan: ${short(m.totalShortfall)}.${lockNote}</p>
+  </div></div>`;
+}
+
+function fixes(){
+  const f = MODEL.fix, m = MODEL.proj.m;
+  const ok = m.allFunded;
+  const now = m.annualContribution;
+  const need = (f.contribMult != null) ? now * f.contribMult : null;
+  const retGoal = state.goals.find(g => g.isRet && g.on);
+
+  /* ---- the headline: one signed number, per year and per month --------- */
+  let big, sub;
+  if (need != null && now > 0){
+    const diff = now - need;
+    if (Math.abs(diff) < Math.max(now, 1) * 0.005){
+      big = `<span>Invested to the rupee</span>`;
+      sub = `What you put away each year is almost exactly what these goals need. There is no slack either way.`;
+    } else if (diff > 0){
+      big = `<span class="good">${short(diff)} a year spare</span>`;
+      sub = need <= 0
+        ? `You are investing ${inr(now)} a year &mdash; ${inr(now/12)} a month. On these assumptions every goal is
+           met even if you stopped investing entirely tomorrow, so all of it is building margin.`
+        : `You are investing ${inr(now)} a year. Every goal is met on ${inr(need)} &mdash; you are putting away about
+           ${inr(diff/12)} a month more than the plan needs.`;
+    } else {
+      big = `<span class="bad">${short(-diff)} a year short</span>`;
+      sub = `You are investing ${inr(now)} a year. These goals need ${inr(need)} &mdash; about
+             ${inr(-diff/12)} a month more than you are putting away.`;
+    }
+  } else if (need != null && now <= 0){
+    big = ok ? `<span class="good">Nothing more needed</span>` : `<span class="bad">${short(need)} a year needed</span>`;
+    sub = ok ? `Every goal is met with no further investing at all.`
+             : `You are investing nothing at present. These goals need ${inr(need)} a year.`;
+  } else {
+    big = `<span class="bad">Investing cannot close it</span>`;
+    sub = `Even at twenty times the current amount the goals are not met in the
+           ${m.retirementYear - state.a.currentYear} year${m.retirementYear-state.a.currentYear>1?"s":""}
+           left to invest. Retiring later or spending less has to do the work.`;
+  }
+
+  /* ---- two bars: what goes in, against what the goals require ---------- */
+  let bars = "";
+  if (need != null && (now > 0 || need > 0)){
+    const top = Math.max(now, need, 1);
+    const row = (lbl, v, colour) => `<div class="barrow"><span class="lbl">${lbl}</span>
+      <div class="track"><div class="fill" style="width:${Math.max(v/top*100, 1.5).toFixed(1)}%;background:${colour}"></div></div>
+      <span class="val">${short(v)}</span></div>`;
+    bars = `<div class="bars">
+      ${row("You invest", now, "var(--s1)")}
+      ${row("Goals need", need, need > now ? "var(--critical)" : "var(--good)")}
+      <div class="barrow"><span class="lbl"></span>
+        <span style="font-size:12px;color:var(--muted);grid-column:2 / span 2">a year, for the
+        ${m.retirementYear - state.a.currentYear} year${m.retirementYear-state.a.currentYear>1?"s":""} of investing left</span></div>
+    </div>`;
+  }
+
+  const stand = `<div class="stand"><div class="verdict"><div class="big">${big}</div>
+    <span class="sub">${sub}</span></div>${bars}</div>`;
+
+  /* ---- the four levers, each signed ------------------------------------ */
+  const cards = [];
+
+  if (f.lumpToday != null){
+    const spare = f.lumpToday >= 0;
+    /* the solver caps removal at the corpus, so equality means the whole lot
+       is spare — the money going in from here carries the plan by itself */
+    const wholeLot = spare && f.lumpToday >= m.currentCorpus - 1;
+    cards.push(`<div class="fix"><div class="lever">Capital today</div>
+      <div class="big ${spare?"good":"bad"}">${wholeLot ? "All of it" : short(Math.abs(f.lumpToday))}</div>
+      <div class="from">${wholeLot ? `the whole ${short(m.currentCorpus)} is spare`
+        : spare ? "could come out of the corpus now" : "would have to go in now"}</div>
+      <p>${wholeLot
+        ? `Even starting from nothing today, what you invest from here funds every goal to age ${state.a.lifeExpectancy}. Nothing in the corpus is committed.`
+        : spare
+        ? `Take that much out today, change nothing else, and every goal is still met to age ${state.a.lifeExpectancy}. It is the corpus that is not spoken for.`
+        : `A one-off addition of this size fixes the plan on its own, with the same investing, the same retirement age and the same spending.`}</p></div>`);
+  }
+
+  if (f.retireAge != null && f.retireAge !== state.a.retirementAge){
+    const d = f.retireAge - state.a.retirementAge, earlier = d < 0;
+    cards.push(`<div class="fix"><div class="lever">${earlier ? "Stop earlier" : "Work longer"}</div>
+      <div class="big ${earlier?"good":"bad"}">Retire at ${f.retireAge}</div>
+      <div class="from">instead of ${state.a.retirementAge} &mdash; ${Math.abs(d)} year${Math.abs(d)>1?"s":""} ${earlier?"earlier":"later"}</div>
+      <p>${earlier
+        ? `The earliest age this corpus can carry every goal to ${state.a.lifeExpectancy}. Working past it builds cushion rather than covering a gap.`
+        : `Contributions keep running and the corpus gets ${d} more year${d>1?"s":""} to compound before drawdown starts.`}</p></div>`);
+  }
+
+  if (need != null && now > 0){
+    const less = need < now;
+    cards.push(`<div class="fix"><div class="lever">${less ? "Invest less" : "Invest more"}</div>
+      <div class="big ${less?"good":"bad"}">${short(need)}<span style="font-size:14px;color:var(--muted)">/yr</span></div>
+      <div class="from">${inr(need/12)} a month, ${less?"down":"up"} from ${inr(now/12)}</div>
+      <p>${less
+        ? `The least that funds every goal while keeping retirement at ${state.a.retirementAge}. Anything above it is building margin.`
+        : `Keeping retirement at ${state.a.retirementAge} works only if annual investing rises to this level for the next ${m.retirementYear - state.a.currentYear} year${m.retirementYear-state.a.currentYear>1?"s":""}.`}</p></div>`);
+  }
+
+  if (f.sustainable != null && retGoal){
+    const cur = num(retGoal.amt), more = f.sustainable > cur;
+    cards.push(`<div class="fix"><div class="lever">${more ? "Spend more" : "Spend less"}</div>
+      <div class="big ${more?"good":"bad"}">${short(f.sustainable)}<span style="font-size:14px;color:var(--muted)">/yr</span></div>
+      <div class="from">${inr(f.sustainable/12)} a month, ${more?"up":"down"} from ${inr(cur/12)} in today's money</div>
+      <p>The largest retirement spend this corpus carries to age ${state.a.lifeExpectancy}, still paying every other goal in full.
+      That is ${pct(Math.abs(f.sustainable/(cur||1) - 1))} ${more?"above":"below"} what you have planned.</p></div>`);
+  }
+
+  return stand + `<div class="fixgrid">${cards.join("")}</div>`;
+}
+
+function goalTable(){
+  const gs = MODEL.proj.goalStatus;
+  if (!gs.length) return `<div class="panel"><div class="empty">No goals yet. Add one on the Goals tab.</div></div>`;
+  const cls = s => s === "Funded" ? "s-funded" : s === "Partial" ? "s-partial" : s === "Unfunded" ? "s-unfunded" : "s-none";
+  const rows = gs.map(g => {
+    const when = g.kind === "onetime" ? String(g.start) : `${g.start}–${g.end}`;
+    const corpus = MODEL.proj.years.find(y => y.year === g.start);
+    return `<tr>
+      <td><b>${esc(g.name)}</b>${g.ess?"":' <span class="pillsm">optional</span>'}</td>
+      <td><span class="pillsm">${g.kind === "onetime" ? "one-time" : "recurring"}</span></td>
+      <td class="mono">${when}</td>
+      <td class="mono r">${short(g.due)}</td>
+      <td class="mono r">${short(g.paid)}</td>
+      <td class="mono r" style="color:${g.short>1?"var(--critical)":"var(--muted)"}">${g.short > 1 ? short(g.short) : "—"}</td>
+      <td class="mono r">${corpus ? short(corpus.opening) : "—"}</td>
+      <td><span class="status ${cls(g.status)}"><span class="g"></span>${g.status}${g.firstShort?` from ${g.firstShort}`:""}</span></td>
+    </tr>`;
+  }).join("");
+  return `<div class="panel"><div class="tblwrap"><table>
+    <thead><tr><th>Goal</th><th>Type</th><th>When</th><th class="r">Cost then</th><th class="r">Funded</th><th class="r">Short by</th><th class="r">Corpus at start</th><th>Status</th></tr></thead>
+    <tbody>${rows}</tbody></table></div></div>`;
+}
+
+function assumptionsPanel(){
+  const s = state, ry = A.retYear(s), ey = A.endYear(s), on = !!s.a.usePostRet;
+  const f = (label, key, val, stepv, hint) =>
+    `<div class="fld"><label for="a_${key}">${label}</label>
+     <input type="number" id="a_${key}" data-as="${key}" value="${val}" step="${stepv}">
+     ${hint?`<span class="hint">${hint}</span>`:""}</div>`;
+  return `<div class="panel panel-pad">
+    <div class="asmp">
+      ${f("Current age","currentAge",s.a.currentAge,1)}
+      ${f("Retirement age","retirementAge",s.a.retirementAge,1,"contributions stop here")}
+      ${f("Plan until age","lifeExpectancy",s.a.lifeExpectancy,1)}
+      <div class="fld"><label>Retirement year</label><div class="derived">${ry}</div><span class="hint">age ${s.a.retirementAge}</span></div>
+      <div class="fld"><label>Plan ends</label><div class="derived">${ey}</div><span class="hint">${ey - s.a.currentYear + 1} years modelled</span></div>
+
+      <div class="fld fld-wide"><label>Return after retiring</label>
+        <div class="retgrp">
+          <label class="chk" for="a_usePostRet" style="padding-top:0">
+            <input type="checkbox" id="a_usePostRet" data-as="usePostRet"${on?" checked":""}>
+            <span>Switch everything to one return once retired</span></label>
+          <div class="pct">
+            <input type="number" id="a_postRetReturn" data-as="postRetReturn"
+              value="${(s.a.postRetReturn*100).toFixed(2)}" step="0.25"${on?"":" disabled"}>
+            <span style="font-size:13px;color:var(--muted)">% a year</span>
+          </div>
+          <div class="why">${on
+            ? `From ${ry} this rate replaces each holding's own Return %. Untick to let every holding keep its own rate for the whole plan.`
+            : `Every holding keeps its own Return % for the whole plan. Tick the box to move them all to a single rate from ${ry}, the usual way of showing a shift out of equity at retirement.`}</div>
+        </div>
+      </div>
+    </div></div>`;
+}
+
+/* A read-only version for the dashboard. The figures live on the Portfolio
+   tab now; this is here so the reader can see what the results rest on
+   without leaving the page. */
+function assumptionsSummary(){
+  const s = state, ry = A.retYear(s), ey = A.endYear(s), on = !!s.a.usePostRet;
+  const it = (k,v,) => `<div class="it"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+  return `<div class="panel panel-pad">
+    <div class="asum">
+      ${it("Age today", s.a.currentAge)}
+      ${it("Retires", ry + " &middot; age " + s.a.retirementAge)}
+      ${it("Plan runs to", s.a.lifeExpectancy + " &middot; " + ey)}
+      ${it("After retiring", on ? pct(s.a.postRetReturn,2) + " on everything" : "each holding's own rate")}
+      ${it("Values as of", asOfLabel(s))}
+    </div>
+
+  </div>`;
+}
+
+/* -------------------------------------------------------------- editors */
+/* -------------------------------------------------------------- editors */
+
+function investmentsTab(){
+  const ry = A.retYear(state), s = state;
+  const money = (k,v) => `<td><input class="w-num money" type="text" inputmode="numeric" data-iv="${k}" value="${IN.format(v)}"></td>`;
+  const rows = s.investments.map(i => `<tr data-id="${i.id}">
+    <td><input type="checkbox" data-iv="on" ${i.on?"checked":""} aria-label="include"></td>
+    <td><input class="w-name" type="text" data-iv="name" value="${esc(i.name)}"></td>
+    <td><select class="w-sel" data-iv="cat">${CATS.map(c=>`<option${c===i.cat?" selected":""}>${c}</option>`).join("")}</select></td>
+    <td><input class="w-name" type="text" data-iv="owner" value="${esc(i.owner)}" style="min-width:110px"></td>
+    ${money("val", i.val)}
+    ${money("cost", num(i.cost, num(i.val)))}
+    ${money("add", i.add)}
+    <td><input class="w-yr" type="number" data-iv="step" value="${(num(i.step)*100).toFixed(1)}" step="1"></td>
+    <td><input class="w-yr" type="number" data-iv="ret" value="${(num(i.ret)*100).toFixed(2)}" step="0.25"></td>
+    <td><select class="w-sel" data-iv="taxWhen" style="min-width:196px">${
+      TAX_WHEN.map(([k,l])=>`<option value="${k}"${k===i.taxWhen?" selected":""}>${l}</option>`).join("")}</select></td>
+    <td><input class="w-yr" type="number" data-iv="taxRate" value="${(num(i.taxRate)*100).toFixed(1)}" step="0.5" min="0"></td>
+    <td><input class="w-yr" type="number" data-iv="pri" value="${num(i.pri,50)}" step="1" min="1"></td>
+    <td><input class="w-yr" type="number" data-iv="until" value="${i.until==null?"":i.until}" placeholder="${ry-1}"></td>
+    <td><input class="w-yr" type="number" data-iv="avail" value="${i.avail==null?"":i.avail}" placeholder="now"></td>
+    <td><button class="icon-btn" data-del="inv" aria-label="Remove ${esc(i.name)}">&#10005;</button></td>
+  </tr>`).join("");
+  const on = s.investments.filter(i=>i.on);
+  const tv = on.reduce((t,i)=>t+num(i.val),0);
+  const ta = on.reduce((t,i)=>t+num(i.add),0);
+  const tc = on.reduce((t,i)=>t+num(i.cost,num(i.val)),0);
+  const embedded = MODEL.proj.m.embeddedTaxNow;
+
+  /* the order money is actually taken in, spelled out from the current numbers */
+  const seen = {};
+  on.forEach(i => seen[i.name] = (seen[i.name] || 0) + 1);
+  const label = i => (seen[i.name] > 1 && i.owner) ? i.name + " (" + i.owner + ")" : i.name;
+  const bands = {};
+  on.forEach(i => { const p = num(i.pri,50); (bands[p] = bands[p] || []).push(label(i)); });
+  const list = n => n.length === 1 ? n[0]
+    : n.slice(0,-1).join(", ") + " and " + n[n.length-1] + " equally";
+  const orderText = Object.keys(bands).map(Number).sort((p,q)=>p-q)
+    .map(p => list(bands[p])).join(", then ");
+
+  return `<section>
+    <div class="sechead"><h2>About you</h2>
+      <span class="note">Your age, when you stop, and how long the plan has to last.</span></div>
+    ${assumptionsPanel()}
+  </section>
+
+  <section style="margin-top:26px">
+    <div class="sechead"><h2>What you hold</h2>
+      <span class="note">Each holding compounds at its own rate. Contributions stop at retirement (${ry}) unless you set a year.</span></div>
+
+    <div class="strip">
+      <div class="grp"><span>Values as of</span>
+        <div class="ctl">
+          <input type="date" id="asOfDate" value="${normDate(s.a.asOf)}" aria-label="Date these values are from">
+          <button class="btn" id="asOfToday" title="Set this to today">Today</button>
+          <button class="btn btn-accent" id="snapBtn" title="File these values under ${asOfYear(s)} in History">Record as ${dateShort(normDate(s.a.asOf))}</button>
+        </div></div>
+      <div class="grp" style="max-width:330px;padding-top:19px">
+        <span class="note" style="font-size:12.5px;line-height:1.45">Everything below is what each holding was worth on
+        ${asOfLabel(s)}. Edits save themselves as you type; <b>Record</b> is separate &mdash; it files these figures under
+        ${asOfYear(s)} in History, stamped with the date in that box. Change the date first to log an older reading.</span></div>
+      <div class="sep"></div>
+      <div class="grp"><span>Gains exempt each year</span>
+        <input class="money" type="text" inputmode="numeric" id="cgExempt" value="${IN.format(num(s.a.cgExempt))}" style="width:118px">
+        </div>
+    </div>
+
+    <div class="panel panel-pad" style="margin-bottom:14px;font-size:13px;line-height:1.55;color:var(--ink-2)">
+      <b style="color:var(--ink)">Withdraw order</b> decides where a goal's money comes from: <b>1</b> is sold first,
+      then 2, then 3, and holdings sharing a number give equal amounts until one runs dry. A holding locked till a later
+      year is skipped until then. As it stands: <b style="color:var(--ink)">${esc(orderText || "nothing included")}</b>.
+      <br>
+      <b style="color:var(--ink)">Tax category</b> says when the gain is taxed.
+      <b>Every year</b> &mdash; bank interest, rent &mdash; pays as it accrues, so that tax never compounds, and nothing
+      more is due when the money comes out. <b>On withdrawal</b> &mdash; equity, debt funds, NPS &mdash; pays nothing
+      until you sell: a withdrawal takes principal and gain in the same proportion as the holding, and only the gain
+      slice is taxed. That deferral is worth real money, which is why the two cannot share one rate.
+      <b>Put in so far</b> is the principal; the rest of the value is gain. Withdrawals are grossed up, so a goal needing
+      ${short(1000000)} pulls more than ${short(1000000)} out of the corpus. Set the rate to <b>0</b> for anything exempt,
+      like EPF and PPF. The yearly exemption applies to withdrawal gains only.
+      ${embedded > 0 ? `Right now ${short(embedded)} of the corpus is tax owed on gains you have not realised yet.` : ""}
+      <span style="color:var(--muted)">Default rates follow Indian rules for FY 2025-26 and are a starting point, not tax advice.</span>
+    </div>
+
+    <div class="panel"><div class="tblwrap"><table>
+      <thead><tr><th></th><th>Holding</th><th>Type</th><th>Owner</th>
+        <th class="r">Value now</th><th class="r">Put in so far</th>
+        <th class="r">Added / yr</th><th class="r">Step-up %</th><th class="r">Return %</th>
+        <th>Tax category</th><th class="r">Tax %</th><th class="r">Withdraw order</th>
+        <th class="r">Invest till</th><th class="r">Locked till</th><th></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="15" class="empty">No holdings yet.</td></tr>`}</tbody>
+      <tfoot><tr><td></td><td>Total</td><td></td><td></td>
+        <td class="mono r" data-live="ivTotal">${inr(tv)}</td>
+        <td class="mono r" data-live="ivCost">${inr(tc)}</td>
+        <td class="mono r" data-live="ivAdd">${inr(ta)}</td>
+        <td colspan="7" class="mono r" data-live="ivRet">blended ${pct(MODEL.proj.m.blendedReturn,2)}</td></tr></tfoot>
+    </table></div></div>
+    <div class="rowactions"><button class="btn btn-accent" data-add="inv">+ Add holding</button>
+      <span class="note" style="color:var(--muted);font-size:12.5px">&ldquo;Locked till&rdquo; keeps money like EPF out of reach until the year you set.</span></div>
+  </section>`;
+}
+
+function goalsTab(){
+  const rows = state.goals.map(g => {
+    const one = g.kind === "onetime";
+    return `<tr data-id="${g.id}">
+      <td><input type="checkbox" data-gl="on" ${g.on?"checked":""} aria-label="include"></td>
+      <td><input class="w-name" type="text" data-gl="name" value="${esc(g.name)}"${g.isRet?' ':''}></td>
+      <td><div class="seg">
+        <button data-kind="onetime" aria-pressed="${one}"${g.isRet?" disabled":""}>One-time</button>
+        <button data-kind="recurring" aria-pressed="${!one}"${g.isRet?" disabled":""}>Every year</button>
+      </div></td>
+      <td><input class="w-yr" type="number" data-gl="start" value="${g.start}"${g.isRet?" disabled":""}></td>
+      <td>${one ? `<span style="color:var(--muted)">—</span>` : `<input class="w-yr" type="number" data-gl="end" value="${g.end}"${g.isRet?" disabled":""}>`}</td>
+      <td><input class="w-num money" type="text" inputmode="numeric" data-gl="amt" value="${IN.format(g.amt)}"></td>
+      <td><input class="w-yr" type="number" data-gl="infl" value="${(num(g.infl)*100).toFixed(1)}" step="0.5"></td>
+      <td style="text-align:center"><input type="checkbox" data-gl="ess" ${g.ess?"checked":""} aria-label="essential"></td>
+      <td>${g.isRet ? `<span class="pillsm">auto</span>` : `<button class="icon-btn" data-del="goal" aria-label="Remove ${esc(g.name)}">✕</button>`}</td>
+    </tr>`;
+  }).join("");
+  return `<section>
+    <div class="sechead"><h2>Goals</h2>
+      <span class="note">Amounts are in today&rsquo;s rupees; each goal inflates at its own rate. Recurring goals repeat every year between the two years.</span></div>
+    <div class="panel"><div class="tblwrap"><table>
+      <thead><tr><th></th><th>Goal</th><th>Type</th><th class="r">From</th><th class="r">To</th>
+        <th class="r">Cost today</th><th class="r">Inflation %</th><th style="text-align:center">Must-have</th><th></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="9" class="empty">No goals yet.</td></tr>`}</tbody>
+    </table></div></div>
+    <div class="rowactions">
+      <button class="btn btn-accent" data-add="goal">+ Add one-time goal</button>
+      <button class="btn" data-add="goalrec">+ Add recurring goal</button>
+      <span class="note" style="color:var(--muted);font-size:12.5px">Must-have goals are paid first when there isn&rsquo;t enough to go round.</span>
+    </div>
+    <div class="callout" style="margin-top:16px">Retirement spending is just a recurring goal &mdash; it starts the year you retire and runs to the end of the plan, so it competes for the same corpus as everything else. Its years follow the retirement age on the dashboard.</div>
+  </section>`;
+}
+
+function histReadout(){
+  const t = MODEL.trk;
+  if (!t.enough && t.sketch){
+    const e = state.history.find(h => h.estimated);
+    return `<div class="callout estcallout" style="margin-bottom:18px"><b>Only one year is recorded, so there is nothing to compare yet.</b>
+      ${e ? `${e.year} on the chart is an estimate, worked back from ${e.year + 1} using the plan's own ${pct(t.assumed,2)} return. Because it comes from the plan, it sits exactly on the plan by construction and says nothing about whether you are ahead or behind &mdash; it is there only to give the chart a slope.
+      Type the real ${e.year} year-end value in the table below and the comparison becomes worth reading.` : ""}</div>`;
+  }
+  if (!t.enough){
+    return `<div class="callout" style="margin-bottom:18px"><b>Add at least two years to see whether you are on track.</b>
+      Record what the portfolio was actually worth at the end of each past year, and what you put in during that year.
+      The tool then compares reality against what your assumed returns would have produced, and tells you the return you actually earned.</div>`;
+  }
+  const ahead = t.gap >= 0;
+  return `<div class="tiles" style="margin-bottom:18px">
+    <div class="tile"><div class="k">Return you actually earned</div>
+      <div class="v ${ahead?"good":"bad"}">${pct(t.implied,2)}</div>
+      <div class="m">over ${t.span} year${t.span>1?"s":""} of records</div></div>
+    <div class="tile"><div class="k">Return the plan assumes</div><div class="v">${pct(t.assumed,2)}</div>
+      <div class="m">weighted across your holdings</div></div>
+    <div class="tile"><div class="k">${ahead?"Ahead of plan":"Behind plan"}</div>
+      <div class="v ${ahead?"good":"bad"}">${(ahead?"+":"")+short(t.gap)}</div>
+      <div class="m">${(ahead?"+":"")+pct(t.gapPct)} against where the plan says you'd be</div></div>
+  </div>`;
+}
+
+function historyTab(){
+  const t = MODEL.trk, liveY = asOfYear(state);
+  const fmtGap = g => g == null ? "&mdash;" : (g >= 0 ? "+" : "") + short(g);
+
+  const rows = state.history.slice().sort((a,b)=>num(a.year)-num(b.year)).map(h => {
+    const r = t.rows.find(x => x.id === h.id) || {};
+    const live = num(h.year) === liveY;
+    const derivedC = h.snaps && h.snaps.length > 0;
+    const gap = t.enough ? r.gap : null;
+
+    const est = !!h.estimated;
+    const yearCell = live
+      ? `<td class="mono"><b>${h.year}</b> <span class="inprog">in progress</span></td>`
+      : est
+      ? `<td class="mono"><b>${h.year}</b> <span class="pillsm est">estimated</span></td>`
+      : `<td><input class="w-yr" type="number" data-hs="year" value="${h.year}"></td>`;
+    /* the running year is the holdings total, so it is shown, not typed */
+    const actualCell = live
+      ? `<td class="mono r derivedcell"><b>${inr(num(h.actual))}</b></td>`
+      : `<td><input class="w-num money" type="text" inputmode="numeric" data-hs="actual" value="${IN.format(h.actual)}"></td>`;
+    const contribCell = est
+      ? `<td class="mono r derivedcell" title="The plan's annual investing, taken back a year">${inr(num(h.contribution))}</td>`
+      : derivedC
+      ? `<td class="mono r derivedcell" title="Added up from the snapshots below">${inr(num(h.contribution))}</td>`
+      : `<td><input class="w-num money" type="text" inputmode="numeric" data-hs="contribution" value="${IN.format(h.contribution)}"></td>`;
+
+    const main = `<tr data-id="${h.id}"${live?' class="live"':est?' class="estrow"':''}>
+      ${yearCell}${actualCell}${contribCell}
+      <td class="mono r" style="color:var(--muted)" data-planned="${h.id}">${r.planned != null ? short(r.planned) : "&mdash;"}</td>
+      <td class="mono r" data-gap="${h.id}" style="color:${gap==null?"var(--muted)":(gap>=0?"var(--good)":"var(--critical)")}">${fmtGap(gap)}</td>
+      <td>${est
+        ? `<span class="estnote">${esc(h.note||"")} Type the real year-end value to replace it.</span>`
+        : `<input type="text" data-hs="note" value="${esc(h.note||"")}" placeholder="${live?"still running":"what changed"}">`}</td>
+      <td>${live?"":`<button class="icon-btn" data-del="hist" aria-label="Remove year ${h.year}">&#10005;</button>`}</td>
+    </tr>`;
+
+    const snaps = (h.snaps||[]).map((sn, k) => {
+      const prev = k > 0 ? num(h.snaps[k-1].total) : null;
+      const move = prev == null ? null : num(sn.total) - prev;
+      return `<tr class="snap" data-hid="${h.id}" data-sid="${sn.id}">
+        <td><div class="when"><span class="rail"></span>
+          <input type="date" data-sn="date" value="${sn.date}" aria-label="Date of this reading"></div></td>
+        <td class="mono r">${inr(num(sn.total))}</td>
+        <td><input class="w-num money" type="text" inputmode="numeric" data-sn="added" value="${IN.format(num(sn.added))}" aria-label="Added since the previous reading"></td>
+        <td class="mono r" style="color:var(--muted)">${move == null ? "&mdash;" : (move>=0?"+":"") + short(move)}</td>
+        <td class="mono r" style="color:var(--muted)">${move == null ? "" : "since last"}</td>
+        <td><input type="text" data-sn="note" value="${esc(sn.note||"")}" placeholder="what changed"></td>
+        <td><button class="icon-btn" data-del="snap" aria-label="Remove the reading from ${dateShort(sn.date)}">&#10005;</button></td>
+      </tr>`;
+    }).join("");
+
+    return main + snaps;
+  }).join("");
+
+  const chart = histChart();
+  return `<section>
+    <div class="sechead"><h2>Where you have actually got to</h2>
+      <span class="note">The projection starts from today. This is the record behind it.</span></div>
+    <div id="histReadout">${histReadout()}</div>
+    <div class="panel panel-pad" style="margin-bottom:18px">
+      <div class="legend"><span><i class="ln" style="background:var(--s1)"></i>What the portfolio was actually worth</span>
+        <span><i class="ln" style="background:var(--muted)"></i>What the assumed return would have produced</span></div>
+      <div class="chartbox" id="histChartBox">${chart || ""}</div></div>
+    <div class="panel"><div class="tblwrap"><table>
+      <thead><tr><th class="r">Year</th><th class="r">Corpus at year end</th><th class="r">Invested during the year</th>
+        <th class="r">Plan would say<span class="infoicon" title="Your corpus if every past year had earned the plan's assumed return, given what you actually invested">ⓘ</span></th><th class="r">Difference<span class="infoicon" title="Actual corpus at year end minus &quot;Plan would say&quot;. Green = ahead of plan, red = behind plan">ⓘ</span></th><th>Note</th><th></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="7" class="empty">No records yet.</td></tr>`}</tbody>
+    </table></div></div>
+    <div class="rowactions"><button class="btn btn-accent" data-add="hist">+ Add an earlier year</button>
+      <span class="note" style="color:var(--muted);font-size:12.5px">Indented rows are the readings you recorded during a
+      year. ${liveY} is still running: its corpus follows the Portfolio tab, and it joins the comparison once the year ends.</span></div>
+  </section>`;
+}
+
+function yearsTab(){
+  const ys = MODEL.proj.years;
+  const rqAll = reqEndFor(ys, reqCurve);
+  /* label holdings the way the withdraw-order sentence does: bare name, with
+     the owner appended only when two holdings share a name */
+  const seen = {};
+  state.investments.filter(i => i.on).forEach(i => seen[i.name] = (seen[i.name] || 0) + 1);
+  const holdLabel = i => (seen[i.name] > 1 && i.owner) ? i.name + " (" + i.owner + ")" : i.name;
+  /* Every holding that either gave money or paid tax this year. A holding
+     taxed as it accrues pays on its growth even in a year nothing is taken
+     out of it, so listing withdrawals alone would leave part of the Tax
+     column unexplained. */
+  const drawnFrom = y => state.investments
+    .filter(i => {
+      const b = i.on && y.byInv[i.id]; if (!b) return false;
+      return b.withdrawal > 1 || (num(b.taxYear) + num(b.taxDraw)) > 1;
+    })
+    .map(i => {
+      const b = y.byInv[i.id];
+      return {name: holdLabel(i), amt: num(b.withdrawal), tax: num(b.taxYear) + num(b.taxDraw)};
+    })
+    .sort((a,b) => (b.amt - a.amt) || (b.tax - a.tax));
+  const rows = ys.map((y, yi) => {
+    const rq = rqAll ? rqAll[yi] : null;
+    const notes = y.goals.map(g => g.short > 1
+      ? `<span style="color:var(--critical)">${esc(g.name)} short ${short(g.short)}</span>`
+      : esc(g.name)).join(", ");
+    return `<tr class="${y.phase==="Retirement"?"retired":""}">
+      <td class="mono">${y.year}</td><td class="mono">${y.age}</td>
+      <td>${y.phase==="Retirement"?'<span class="pillsm">retired</span>':""}</td>
+      <td class="mono r">${short(y.opening)}</td>
+      <td class="mono r" style="color:${y.contribution?"var(--s1)":"var(--muted)"}">${y.contribution?short(y.contribution):"—"}</td>
+      <td class="mono r" style="color:var(--s2)">${short(y.growth)}</td>
+      <td class="mono r" style="color:${y.goalSpend?"var(--s3)":"var(--muted)"}">${y.goalSpend?short(y.goalSpend):"—"}</td>
+      <td class="mono r" style="color:${y.retSpend?"var(--s4)":"var(--muted)"}">${y.retSpend?short(y.retSpend):"—"}</td>
+      <td class="mono r" style="color:${y.tax?"var(--s5)":"var(--muted)"}">${y.tax?short(y.tax):"—"}</td>
+      <td class="mono r"><b>${short(y.closing)}</b></td>
+      ${rq == null ? `<td class="mono r" style="color:var(--muted)">&mdash;</td>`
+        : `<td class="mono r" style="color:${y.closing-rq>=0?"var(--good)":"var(--critical)"}">${(y.closing-rq>=0?"+":"")+short(y.closing-rq)}</td>`}
+      <td style="font-size:12px;color:var(--ink-2);min-width:190px">${(() => {
+        const d = drawnFrom(y);
+        return d.length ? d.map(x => `<span class="drawn"><b>${esc(x.name)}</b>${
+            x.amt > 1 ? " " + short(x.amt) : ""}${
+            x.tax > 1 ? `<em>${x.amt > 1 ? "tax " : "tax only "}${short(x.tax)}</em>` : ""}</span>`).join("")
+          : `<span style="color:var(--muted)">&mdash;</span>`;
+      })()}</td>
+      <td style="font-size:12px;color:var(--ink-2)">${notes||""}</td>
+    </tr>`;
+  }).join("");
+  return `<section>
+    <div class="sechead"><h2>Year by year</h2>
+      <span class="note">Every rupee in and out, from now to age ${state.a.lifeExpectancy}. &ldquo;Drawn from&rdquo; is the gross taken out of each holding, and the tax each one paid &mdash; a holding taxed every year pays on its growth even when nothing is withdrawn from it.</span>
+      <span class="spacer"></span>
+      <button class="btn" id="csvBtn">Download as CSV</button></div>
+    <div class="panel"><div class="tblwrap"><table>
+      <thead><tr><th class="r">Year</th><th class="r">Age</th><th></th><th class="r">Opening</th><th class="r">Invested</th>
+        <th class="r">Growth</th><th class="r">Goals</th><th class="r">Living costs</th><th class="r">Tax</th><th class="r">Closing</th><th class="r">Surplus / short</th><th>Drawn from, and tax</th><th>What happens</th></tr></thead>
+      <tbody>${rows}</tbody></table></div></div>
+  </section>`;
+}
+
+function dashTab(){
+  return `
+    <section>${banner()}</section>
+    <!-- The premises come before the numbers they produce: the verdict says
+         what the answer is, this says what it was worked out from, and
+         everything below follows. -->
+    <section>
+      <div class="sechead"><h2>What this rests on</h2>
+        <span class="note">Every figure below is worked out from these. Change any of them on the Portfolio tab.</span></div>
+      <div id="asmpBox">${assumptionsSummary()}</div>
+    </section>
+    <section>${tiles()}</section>
+    <section>
+      <div class="sechead"><h2>The corpus over time</h2>
+        <span class="note">Recorded history to ${state.a.currentYear}, projected after.</span></div>
+      <div class="panel panel-pad">
+        <div class="legend">
+          <span><i class="ln" style="background:var(--c-rec)"></i>Actually recorded</span>
+          <span><i class="ln" style="background:var(--c-proj)"></i>Projected</span>
+          <span><i class="ln" style="background:var(--c-need)"></i>Needed to fund every goal</span>
+          <span><i class="ln" style="background:var(--c-ret)"></i>Retirement</span>
+          <span><i class="ln" style="background:var(--c-goal)"></i>One-time goals</span>
+        </div>
+        <div class="chartbox" id="corpusBox"></div>
+      </div>
+    </section>
+    <section>
+      <div class="sechead"><h2>Are you investing enough?</h2>
+        <span class="note">Each card is the point at which one lever, on its own, exactly funds every goal to age ${state.a.lifeExpectancy}. Green is slack; red is a gap.</span></div>
+      ${fixes()}
+    </section>
+    <section>
+      <div class="sechead"><h2>Are the goals funded?</h2>
+        <span class="note">Costs are inflated to the year they fall due.</span></div>
+      ${goalTable()}
+    </section>
+    <section>
+      <div class="sechead"><h2>Money in, money out</h2>
+        <span class="note">Above the line is what goes in; below is what comes out.</span></div>
+      <div class="panel panel-pad">
+        <div class="legend">
+          <span><i style="background:var(--s1)"></i>Invested</span>
+          <span><i style="background:var(--s2)"></i>Growth</span>
+          <span><i style="background:var(--s3)"></i>Goal spending</span>
+          <span><i style="background:var(--s4)"></i>Living costs in retirement</span><span><i style="background:var(--s5)"></i>Tax</span>
+          <span><i class="unf"></i>Needed but not paid</span>
+        </div>
+        <div class="chartbox" id="flowBox"></div>
+        <div class="legendnote">Exact figures for every year are on the <b>Year by year</b> tab.</div>
+      </div>
+    </section>
+`;
+}
+
+/* ---- src/ui/render.js ---- */
+/* Lifted from the v37 planner page (_archive/v37_reference) on 2026-09-19; edited since. */
+/* ------------------------------------------------------------- rendering */
+function render(){
+  recompute();
+  verdict();
+  const main = document.getElementById("main");
+  const roll = rollNote ? `<div class="rollnote"><div><b>A new year has started.</b>
+      ${rollNote.years.length === 1 ? rollNote.years[0] + " has closed" : rollNote.years.join(", ") + " have closed"}
+      and now counts towards the on-track comparison, and ${rollNote.to} has opened. Check that the closing
+      figure for ${rollNote.years[rollNote.years.length-1]} is the real year-end one, then update the holdings
+      on the Portfolio tab to what they are worth now.</div>
+      <div class="acts"><button class="btn" id="rollUndoBtn">Undo</button>
+      <button class="btn" id="rollOkBtn">Got it</button></div></div>` : "";
+  if (activeTab === "dash")      main.innerHTML = dashTab();
+  else if (activeTab === "inv")  main.innerHTML = investmentsTab();
+  else if (activeTab === "goals")main.innerHTML = goalsTab();
+  else if (activeTab === "hist") main.innerHTML = historyTab();
+  else                           main.innerHTML = yearsTab();
+  if (roll) main.insertAdjacentHTML("afterbegin", roll);
+  if (activeTab === "dash") paintCharts();
+}
+
+/* soft update: recompute and repaint everything except live input fields */
+function softUpdate(){
+  recompute();
+  verdict();
+  if (activeTab === "dash"){
+    const set = (sel, html) => { const el = document.querySelector(sel); if (el) el.innerHTML = html; };
+    const secs = document.querySelectorAll("#main > section");
+    if (secs[0]) secs[0].innerHTML = banner();
+    if (secs[1]) secs[1].innerHTML = tiles();
+    if (secs[3]) secs[3].querySelector(".fixgrid, .callout")?.replaceWith(nodeFrom(fixes()));
+    if (secs[4]) { const p = secs[4].querySelector(".panel"); if (p) p.replaceWith(nodeFrom(goalTable())); }
+    void set;
+    paintCharts();
+  } else if (activeTab === "inv"){
+    const tv = state.investments.filter(i=>i.on).reduce((t,i)=>t+num(i.val),0);
+    const ta = state.investments.filter(i=>i.on).reduce((t,i)=>t+num(i.add),0);
+    const a = document.querySelector('[data-live="ivTotal"]'); if (a) a.textContent = inr(tv);
+    const b = document.querySelector('[data-live="ivAdd"]');   if (b) b.textContent = inr(ta);
+    const c = document.querySelector('[data-live="ivRet"]');   if (c) c.textContent = "blended " + pct(MODEL.proj.m.blendedReturn,2);
+  } else if (activeTab === "hist"){
+    const t = MODEL.trk;
+    t.rows.forEach(r => {
+      const p = document.querySelector(`[data-planned="${r.id}"]`);
+      const g = document.querySelector(`[data-gap="${r.id}"]`);
+      if (p) p.textContent = r.planned != null ? short(r.planned) : "—";
+      if (g){
+        g.textContent = r.gap != null ? ((r.gap>=0?"+":"") + short(r.gap)) : "—";
+        g.style.color = r.gap != null ? (r.gap>=0 ? "var(--good)" : "var(--critical)") : "var(--muted)";
+      }
+    });
+    const box = document.getElementById("histChartBox");
+    if (box){ const c = histChart(); box.innerHTML = c || ""; }
+    const ro = document.getElementById("histReadout");
+    if (ro) ro.innerHTML = histReadout();
+  }
+  markDirty();
+}
+function nodeFrom(html){ const d = document.createElement("div"); d.innerHTML = html.trim(); return d.firstElementChild; }
+
+function paintCharts(){
+  const cbox = document.getElementById("corpusBox");
+  if (cbox){
+    const c = corpusChart();
+    cbox.innerHTML = c.svg + `<div class="tip" id="ctip"></div>`;
+    wireCorpusHover(cbox, c);
+  }
+  const fbox = document.getElementById("flowBox");
+  if (fbox){
+    const f = flowChart();
+    fbox.innerHTML = f.svg + `<div class="tip" id="ftip"></div>`;
+    wireFlowHover(fbox, f);
+  }
+}
+
+function hoverIndex(box, evt, count, mapX){
+  const svg = box.querySelector("svg"), r = svg.getBoundingClientRect();
+  const vx = (evt.clientX - r.left) / r.width * CW;
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < count; i++){ const d = Math.abs(mapX(i) - vx); if (d < bd){ bd = d; best = i; } }
+  return {i: best, rect: r};
+}
+
+function wireCorpusHover(box, c){
+  const svg = box.querySelector("svg"), tip = box.querySelector("#ctip"), cx = svg.querySelector("#cx");
+  const years = MODEL.proj.years;
+  /* Every point on the purple "actually recorded" line gets its own tooltip too, built from the
+     history row itself: Opening is the prior recorded year's Closing, and Plan would say /
+     Difference reuse track()'s own numbers — the same ones the History tab shows. A row with
+     nothing earlier to compare against (the very first one, or one track() can't yet place on
+     the plan curve) just shows whatever it has, where only limited information is available. */
+  const liveY = state.a.currentYear;
+  const histRows = MODEL.trk.rows.filter(r => num(r.year) < liveY).sort((a,b) => num(a.year) - num(b.year));
+  const candidates = histRows.map(r => ({kind:"hist", year:num(r.year), row:r}))
+    .concat(years.map(y => ({kind:"proj", year:y.year, row:y})));
+  const move = e => {
+    const {i, rect} = hoverIndex(box, e, candidates.length, k => c.X(candidates[k].year));
+    const cand = candidates[i];
+    const row = (l,v,col) => `<div class="tr"><span>${col?`<span class="sw" style="background:${col}"></span>`:""}${l}</span><b>${v}</b></div>`;
+    let px, py, html;
+
+    if (cand.kind === "proj"){
+      const y = cand.row;
+      px = c.X(y.year); py = c.Y(y.closing);
+      const rqAll = reqEndFor(years, reqCurve); const rq = rqAll ? rqAll[years.indexOf(y)] : null;
+      html = `<div class="th">${y.year} &middot; age ${y.age}${y.phase==="Retirement"?" &middot; retired":""}</div>`
+        + row("Opening", short(y.opening))
+        + (y.contribution ? row("Invested", short(y.contribution), "var(--s1)") : "")
+        + row("Growth", short(y.growth), "var(--s2)")
+        + (y.goalSpend ? row("Goals", "−"+short(y.goalSpend), "var(--s3)") : "")
+        + (y.tax ? row("Tax", "−"+short(y.tax), "var(--s5)") : "")
+        + (y.retSpend ? row("Living costs", "−"+short(y.retSpend), "var(--s4)") : "")
+        + row("<b>Closing</b>", "<b>"+short(y.closing)+"</b>")
+        + (y.shortfall > 1 ? `<div class="tr" style="color:var(--critical)"><span>Unfunded</span><b>${short(y.shortfall)}</b></div>` : "")
+        + (rq != null ? `<div class="tr" style="border-top:1px solid var(--line);margin-top:4px;padding-top:4px">
+             <span>Needed by then</span><b>${short(rq)}</b></div>
+           <div class="tr"><span>${y.closing - rq >= 0 ? "Surplus" : "Short by"}</span>
+             <b style="color:${y.closing-rq>=0?"var(--good)":"var(--critical)"}">${short(Math.abs(y.closing-rq))}</b></div>` : "");
+    } else {
+      const r = cand.row;
+      const idx = histRows.indexOf(r);
+      const prev = idx > 0 ? histRows[idx-1] : null;
+      const opening = prev ? num(prev.actual) : null;
+      const invested = num(r.contribution);
+      const growth = opening != null ? num(r.actual) - opening - invested : null;
+      const age = state.a.currentAge + (num(r.year) - liveY);
+      px = c.X(cand.year); py = c.Y(num(r.actual));
+      let tail = "";
+      if (r.estimated){
+        tail = `<div class="tr" style="color:var(--muted);font-style:italic;border-top:1px solid var(--line);margin-top:4px;padding-top:4px">${esc(r.note || "Estimated, not a recorded value")}</div>`;
+      } else if (r.planned != null){
+        tail = `<div class="tr" style="border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><span>Plan would say</span><b>${short(r.planned)}</b></div>`
+          + `<div class="tr"><span>Difference</span><b style="color:${r.gap>=0?"var(--good)":"var(--critical)"}">${(r.gap>=0?"+":"")+short(r.gap)}</b></div>`;
+      } else if (opening == null){
+        tail = `<div class="tr" style="color:var(--muted);font-style:italic">Earliest year recorded &mdash; nothing earlier to compare</div>`;
+      }
+      html = `<div class="th">${r.year} &middot; age ${age}${r.estimated?" &middot; estimated":""}</div>`
+        + (opening != null ? row("Opening", short(opening)) : "")
+        + (invested ? row("Invested", short(invested), "var(--s1)") : "")
+        + (growth != null ? row("Growth", short(growth), "var(--s2)") : "")
+        + row("<b>Closing</b>", "<b>"+short(num(r.actual))+"</b>")
+        + tail;
+    }
+
+    cx.style.opacity = 1;
+    cx.querySelector("line").setAttribute("x1", px); cx.querySelector("line").setAttribute("x2", px);
+    cx.querySelector("circle").setAttribute("cx", px); cx.querySelector("circle").setAttribute("cy", py);
+    tip.innerHTML = html;
+    tip.style.opacity = 1;
+    const sx = rect.width / CW;
+    let left = px * sx + 14;
+    if (left + 190 > rect.width) left = px * sx - 190;
+    tip.style.left = Math.max(0, left) + "px";
+    tip.style.top = Math.max(0, Math.min(py * sx - 20, rect.height - 150)) + "px";
+  };
+  svg.addEventListener("mousemove", move);
+  svg.addEventListener("mouseleave", () => { tip.style.opacity = 0; cx.style.opacity = 0; });
+}
+
+function wireFlowHover(box, f){
+  const svg = box.querySelector("svg"), tip = box.querySelector("#ftip");
+  const years = f.years;
+  svg.addEventListener("mousemove", e => {
+    const {i, rect} = hoverIndex(box, e, years.length, k => f.X(k));
+    const y = years[i];
+    const row = (l,v,col) => `<div class="tr"><span><span class="sw" style="background:${col}"></span>${l}</span><b>${v}</b></div>`;
+    tip.innerHTML = `<div class="th">${y.year} &middot; age ${y.age}</div>`
+      + (y.contribution ? row("Invested", short(y.contribution), "var(--s1)") : "")
+      + row("Growth", short(y.growth), "var(--s2)")
+      + (y.goalSpend ? row("Goal spending", short(y.goalSpend), "var(--s3)") : "")
+      + (y.retSpend ? row("Living costs", short(y.retSpend), "var(--s4)") : "")
+      + (y.tax ? row("Tax", short(y.tax), "var(--s5)") : "")
+      + (y.shortfall > 1 ? `<div class="tr" style="color:var(--critical)"><span><span class="sw" style="background:var(--crit-wash);outline:1px dashed var(--critical)"></span>Needed but not paid</span><b>${short(y.shortfall)}</b></div>` : "")
+      + `<div class="tr" style="border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><span>Net</span><b>${short(y.contribution+y.growth-y.outflow)}</b></div>`;
+    tip.style.opacity = 1;
+    const sx = rect.width / CW;
+    let left = f.X(i) * sx + 14;
+    if (left + 190 > rect.width) left = f.X(i) * sx - 190;
+    tip.style.left = Math.max(0, left) + "px";
+    tip.style.top = "10px";
+  });
+  svg.addEventListener("mouseleave", () => { tip.style.opacity = 0; });
+}
+
+/* ---- src/ui/snapshots.js ---- */
+/* Lifted from the v37 planner page (_archive/v37_reference) on 2026-09-19; edited since. */
+function recordSnapshot(){
+  normalize(state);
+  const liveY = asOfYear(state);
+  const row = state.history.find(h => num(h.year) === liveY);
+  if (!row) return;
+  const on = state.investments.filter(i => i.on);
+  const total = on.reduce((t,i) => t + num(i.val), 0);
+  const byInv = {}; on.forEach(i => byInv[i.id] = num(i.val));
+  const date = normDate(state.a.asOf);
+  const dup = (row.snaps || []).find(sn => sn.date === date);
+  if (dup){ dup.total = total; dup.byInv = byInv; }
+  else row.snaps.push({id:uid("sn"), date, total, added:0, note:"", byInv});
+  normalize(state);
+  activeTab = "hist";
+  render(); markDirty();
+  flash((dup ? "updated " : "recorded ") + dateShort(date));
+}
+
+function applySnap(tr, el){
+  const h = state.history.find(x => x.id === tr.dataset.hid); if (!h) return;
+  const sn = (h.snaps || []).find(x => x.id === tr.dataset.sid); if (!sn) return;
+  const k = el.dataset.sn;
+  if (k === "note") sn.note = el.value;
+  else if (k === "added") sn.added = mnum(el.value);
+  else if (k === "date"){
+    const d = normDate(el.value, h.year);
+    sn.date = d;
+    /* a reading moved into another year belongs to that year's row */
+    if (dateYear(d) !== num(h.year)){
+      h.snaps = h.snaps.filter(x => x.id !== sn.id);
+      let target = state.history.find(x => num(x.year) === dateYear(d));
+      if (!target){
+        target = {id:uid("h"), year:dateYear(d), actual:sn.total, contribution:0, snaps:[], note:""};
+        state.history.push(target);
+      }
+      target.snaps.push(sn);
+    }
+  }
+  normalize(state);
+}
+
+/* ---- src/ui/events.js ---- */
+/* Lifted from the v37 planner page (_archive/v37_reference) on 2026-09-19; edited since. */
+/* ================================================================ events */
+/* Listeners attach once, after the shell has rendered its root markup. */
+function wireEvents(){
+  document.getElementById("tabs").addEventListener("click", e => {
+    const b = e.target.closest(".tab"); if (!b) return;
+    activeTab = b.dataset.tab;
+    document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", String(t === b)));
+    render();
+  });
+
+  /* Editing the as-of date is an explicit statement about which year the plan
+     sits in, so it also acknowledges the current year — otherwise entering an
+     old snapshot would immediately trip the rollover and undo the edit. */
+  function applyAsOf(){
+    const el = document.getElementById("asOfDate");
+    if (!el || !/^\d{4}-\d{2}-\d{2}$/.test(el.value)) return;   // mid-typing, ignore
+    state.a.asOf = el.value;
+    state.a.rolledThrough = Math.max(num(state.a.rolledThrough), new Date().getFullYear() - 1);
+    normalize(state);
+  }
+
+  document.getElementById("main").addEventListener("input", e => {
+    const el = e.target;
+    if (el.id === "cgExempt"){ state.a.cgExempt = mnum(el.value); softUpdate(); return; }
+    if (el.dataset.as !== undefined){ applyAssumption(el); softUpdate(); return; }
+    const tr = el.closest("tr");
+    if (!tr) return;
+    if (el.dataset.iv !== undefined){ applyInv(tr.dataset.id, el); softUpdate(); }
+    else if (el.dataset.gl !== undefined){ applyGoal(tr.dataset.id, el); softUpdate(); }
+    else if (el.dataset.hs !== undefined){ applyHist(tr, el); softUpdate(); }
+    else if (el.dataset.sn !== undefined){ applySnap(tr, el); softUpdate(); }
+  });
+
+  document.getElementById("main").addEventListener("change", e => {
+    const el = e.target;
+    if (el.id === "asOfDate"){
+      applyAsOf(); setTimeout(() => { render(); markDirty(); }, 0); return; }
+    if (el.dataset.sn === "date"){
+      const tr = el.closest("tr");
+      if (tr){ applySnap(tr, el); setTimeout(() => { render(); markDirty(); }, 0); }
+      return;
+    }
+    /* holdings are kept in withdraw-priority order; re-sort once the number is
+       committed, never while it is being typed */
+    if (el.dataset.iv === "pri"){ sortHoldings(state); render(); markDirty(); return; }
+    if (el.type === "checkbox" || el.tagName === "SELECT"){
+      if (el.dataset.as !== undefined){ applyAssumption(el); render(); return; }
+      const tr = el.closest("tr"); if (!tr) return;
+      if (el.dataset.iv !== undefined) applyInv(tr.dataset.id, el);
+      else if (el.dataset.gl !== undefined) applyGoal(tr.dataset.id, el);
+      render(); markDirty();
+    }
+  });
+
+  document.getElementById("main").addEventListener("click", e => {
+    if (e.target.id === "snapBtn"){ recordSnapshot(); return; }
+    if (e.target.id === "asOfToday"){
+      state.a.asOf = systemDate();
+      state.a.rolledThrough = Math.max(num(state.a.rolledThrough), new Date().getFullYear() - 1);
+      normalize(state); render(); markDirty(); return;
+    }
+    if (e.target.id === "rollOkBtn"){ rollNote = null; render(); return; }
+    if (e.target.id === "rollUndoBtn"){
+      if (rollUndo){ state = rollUndo; rollUndo = null; normalize(state); }
+      rollNote = null; render(); markDirty(); flash("rollover undone"); return;
+    }
+    const kindBtn = e.target.closest("[data-kind]");
+    if (kindBtn && !kindBtn.disabled){
+      const g = state.goals.find(x => x.id === kindBtn.closest("tr").dataset.id);
+      if (g){ g.kind = kindBtn.dataset.kind; if (g.kind === "onetime") g.end = g.start;
+              else if (g.end <= g.start) g.end = Math.min(g.start + 10, A.endYear(state)); }
+      render(); markDirty(); return;
+    }
+    const del = e.target.closest("[data-del]");
+    if (del){
+      const tr = del.closest("tr");
+      if (del.dataset.del === "inv")  state.investments = state.investments.filter(i => i.id !== tr.dataset.id);
+      if (del.dataset.del === "goal") state.goals = state.goals.filter(g => g.id !== tr.dataset.id);
+      if (del.dataset.del === "hist"){
+        const gone = state.history.find(h => h.id === tr.dataset.id);
+        if (gone && gone.estimated) state.a.noEstimate = true;     // removed on purpose: stay removed
+        state.history = state.history.filter(h => h.id !== tr.dataset.id);
+      }
+      if (del.dataset.del === "snap"){
+        const h = state.history.find(x => x.id === tr.dataset.hid);
+        if (h) h.snaps = (h.snaps || []).filter(x => x.id !== tr.dataset.sid);
+      }
+      normalize(state);
+      render(); markDirty(); return;
+    }
+    const add = e.target.closest("[data-add]");
+    if (add){
+      const cy = state.a.currentYear;
+      if (add.dataset.add === "inv")
+        state.investments.push({id:uid("i"), name:"New holding", cat:"Equity", owner:"",
+          val:0, cost:0, add:0, step:0, ret:0.10, until:null, avail:null, on:true,
+          pri: state.investments.reduce((m,i) => Math.max(m, num(i.pri,1)), 0) + 1,
+          taxWhen:taxDefault("Equity").when, taxRate:taxDefault("Equity").rate});
+      if (add.dataset.add === "goal")
+        state.goals.push({id:uid("g"), name:"New goal", kind:"onetime", start:cy+3, end:cy+3, amt:1000000, infl:0.06, ess:false, on:true, isRet:false});
+      if (add.dataset.add === "goalrec")
+        state.goals.push({id:uid("g"), name:"New recurring goal", kind:"recurring", start:cy, end:cy+10, amt:300000, infl:0.06, ess:false, on:true, isRet:false});
+      if (add.dataset.add === "hist"){
+        const yrs = state.history.map(h => h.year);
+        const y = yrs.length ? Math.min.apply(null, yrs) - 1 : cy - 1;
+        state.history.push({id:uid("h"), year:y, actual:0, contribution:0, note:"", snaps:[]});
+      }
+      render(); markDirty(); return;
+    }
+    if (e.target.id === "csvBtn") exportCsv();
+  });
+
+  document.getElementById("main").addEventListener("focusin", e => {
+    const el = e.target;
+    if (el.classList && el.classList.contains("money")){
+      /* strip the grouping separators for editing, then select the lot — assigning
+         value moves the caret to the end, and without this a typed figure would
+         land on the end of the old one instead of replacing it */
+      const v = mnum(el.value); el.value = v ? String(v) : "";
+      try { el.select(); } catch(e){ /* not selectable, no matter */ }
+    }
+  });
+  document.getElementById("main").addEventListener("focusout", e => {
+    const el = e.target;
+    if (el.classList && el.classList.contains("money")) el.value = IN.format(mnum(el.value));
+  });
+}
+
+function applyAssumption(el){
+  const k = el.dataset.as;
+  if (k === "usePostRet") state.a.usePostRet = el.checked;
+  else if (k === "postRetReturn") state.a.postRetReturn = num(el.value)/100;
+  else state.a[k] = Math.round(num(el.value));
+  normalize(state);
+}
+function applyInv(id, el){
+  const i = state.investments.find(x => x.id === id); if (!i) return;
+  const k = el.dataset.iv;
+  if (k === "on") i.on = el.checked;
+  else if (k === "cat"){
+    /* move the category and rate to the new type's defaults, but only while
+       they still sit on the old type's — never overwrite a real edit */
+    const was = taxDefault(i.cat);
+    const untouched = Math.abs(num(i.taxRate) - was.rate) < 1e-9 && i.taxWhen === was.when;
+    i.cat = el.value;
+    if (untouched){ const now = taxDefault(i.cat); i.taxWhen = now.when; i.taxRate = now.rate; }
+  }
+  else if (k === "taxWhen") i.taxWhen = el.value;
+  else if (k === "taxRate") i.taxRate = Math.max(0, num(el.value)/100);
+  else if (k === "pri") i.pri = Math.max(1, Math.round(num(el.value)));
+  else if (k === "name" || k === "owner") i[k] = el.value;
+  else if (k === "ret" || k === "step") i[k] = num(el.value)/100;
+  else if (k === "until" || k === "avail") i[k] = el.value === "" ? null : Math.round(num(el.value));
+  else i[k] = mnum(el.value);
+}
+function applyGoal(id, el){
+  const g = state.goals.find(x => x.id === id); if (!g) return;
+  const k = el.dataset.gl;
+  if (k === "on") g.on = el.checked;
+  else if (k === "ess") g.ess = el.checked;
+  else if (k === "name") g.name = el.value;
+  else if (k === "infl") g.infl = num(el.value)/100;
+  else if (k === "start" || k === "end") g[k] = Math.round(num(el.value));
+  else g[k] = mnum(el.value);
+  if (g.kind === "onetime") g.end = g.start;
+}
+function applyHist(tr, el){
+  const h = state.history.find(x => x.id === tr.dataset.id); if (!h) return;
+  const k = el.dataset.hs;
+  if (k === "note") h.note = el.value;
+  else if (k === "year") h.year = Math.round(num(el.value));
+  else h[k] = mnum(el.value);
+  /* a real figure typed into the estimated year retires the estimate, silently,
+     and it is never derived over again */
+  if (h.estimated && k === "actual"){
+    delete h.estimated;
+    if (String(h.note || "").startsWith("Estimated, not a recorded value")) h.note = "";
+  }
+}
+
+/* ---- src/ui/app.js ---- */
+/* ================================================================== app
+   The shell: page state, header, the empty state, Load / Save wiring, the
+   unsaved counter and the boot. Replaces the whole persistence section of
+   the v37 planner page (_archive/v37_reference).
+
+   The page always opens EMPTY. Nothing is remembered between sessions: a
+   plan enters only through Load (or the sample) and leaves only through
+   Save. See src/storage/files.js for how Save works where.               */
+
+let state = null;          // the plan, in memory only; null = nothing open
+let MODEL = null;
+let activeTab = "dash";
+let reqCurve = null, reqTimer = null;
+let rollNote = null, rollUndo = null;
+
+/* what the header needs to know about the plan that is open */
+const DOC = {
+  origin: null,            // "file" | "sample"
+  name: null,              // what to call it in the header
+  knownText: null,         // the bytes last read from / written to disk
+  dirty: false,
+  since: null              // when it was opened or last saved
+};
+
+const APP_VERSION = "v1.0.0";
+
+/* ---------------------------------------------------------- recompute */
+function recompute(){
+  normalize(state);
+  ensureEstimate(state);          // keeps a still-estimated year in step with the one it came from
+  const proj = project(state);
+  MODEL = {proj, trk: track(state), fix: solveAll(state)};
+  scheduleRequired();
+  return MODEL;
+}
+
+/* The required curve costs a few hundred milliseconds, far too much for every
+   keystroke, so it is computed once editing settles. While stale, the old one
+   stays on the chart; it is dropped only when the year count changes. */
+function scheduleRequired(){
+  if (reqTimer) clearTimeout(reqTimer);
+  reqTimer = setTimeout(() => {
+    reqTimer = null;
+    if (!state || !MODEL) return;
+    try { reqCurve = requiredCurve(state, MODEL.proj); }
+    catch(e){ reqCurve = null; }
+    if (activeTab === "dash") paintCharts();
+    if (activeTab === "years") render();
+  }, 260);
+}
+
+/* ------------------------------------------------------------- export */
+function exportCsv(){
+  const ys = MODEL.proj.years;
+  let rq = reqEndFor(ys, reqCurve);
+  if (!rq){ try { reqCurve = requiredCurve(state, MODEL.proj); rq = reqEndFor(ys, reqCurve); } catch(e){ rq = null; } }
+  offerDownload("goal_planner_projection.csv", toCsv(yearRows(state, ys, rq)), "text/csv")
+    .then(r => {
+      if (r.ok) flash("downloaded");
+      else if (!r.declined) flash("could not download");
+    });
+}
+
+/* ------------------------------------------------------------ messages */
+function flash(msg){
+  const el = document.getElementById("saveInd");
+  if (!el || !msg) return;
+  el.textContent = msg;
+  setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 2600);
+}
+function notice(kind, html){
+  const box = document.getElementById("notices");
+  if (!box) return null;
+  const el = document.createElement("div");
+  el.className = "notice" + (kind === "warn" ? " warn" : "");
+  el.innerHTML = `<div>${html}</div><button class="x" aria-label="Dismiss">&times;</button>`;
+  el.querySelector(".x").addEventListener("click", () => el.remove());
+  box.appendChild(el);
+  return el;
+}
+function clearNotices(){ const b = document.getElementById("notices"); if (b) b.innerHTML = ""; }
+
+/* An in-page question, not a browser confirm box: nothing modal, and the
+   answer buttons sit where the eye already is. */
+function askInline(html, yes, no){
+  return new Promise(resolve => {
+    const box = document.getElementById("notices");
+    const el = document.createElement("div");
+    el.className = "notice warn ask";
+    el.innerHTML = `<div>${html}</div><div class="acts">
+      <button class="btn btn-accent" data-a="1">${esc(yes)}</button>
+      <button class="btn" data-a="0">${esc(no)}</button></div>`;
+    el.addEventListener("click", e => {
+      const b = e.target.closest("[data-a]"); if (!b) return;
+      el.remove(); resolve(b.dataset.a === "1");
+    });
+    box.prepend(el);
+    el.querySelector("[data-a='1']").focus();
+  });
+}
+
+/* ------------------------------------------------------------- dirty */
+function markDirty(){
+  if (!state) return;
+  DOC.dirty = true;
+  paintStatus();
+}
+
+function ago(d){
+  const min = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return min + " min";
+  const h = Math.floor(min / 60);
+  return h + " h " + (min % 60) + " min";
+}
+
+function paintStatus(){
+  const pill = document.getElementById("storePill"), txt = document.getElementById("storeTxt");
+  const save = document.getElementById("planSave");
+  if (!pill) return;
+  if (!state){
+    pill.className = "storepill"; txt.textContent = "no plan open";
+    pill.title = "Load a plan file, or start from the sample.";
+  } else if (DOC.dirty){
+    pill.className = "storepill warn";
+    const a = ago(DOC.since);
+    txt.textContent = DOC.origin === "sample" && !DOC.knownText
+      ? "unsaved sample — " + (a === "just now" ? "started just now" : a + " since you started")
+      : "unsaved — " + (a === "just now" ? "changed since last save" : a + " since last save");
+    pill.title = "Changes are only in this tab. Closing it loses them. Press Save.";
+  } else {
+    pill.className = "storepill live";
+    txt.textContent = DOC.name;
+    pill.title = "What you see matches the file.";
+  }
+  if (save){
+    save.hidden = !state;
+    save.className = "btn" + (state && DOC.dirty ? " btn-accent" : "");
+  }
+}
+
+/* ------------------------------------------------------------- shell */
+function shellHtml(){
+  return `
+<div class="safety" role="note">
+  <div class="wrap safetyin">
+    <span><b>Your figures never leave your computer.</b> This page has no server and keeps no copy of anything:
+    <b>Load</b> reads a plan file inside your browser, and <b>Save</b> puts it back
+    on your own disk. Close the tab and nothing is left behind.</span>
+  </div>
+</div>
+<div class="top">
+  <div class="wrap">
+    <div class="topin">
+      <div class="brand">
+        <h1>Goal Planner</h1>
+        <span class="sub">Financial plan &middot; ${esc(APP_VERSION)}</span>
+      </div>
+      <div id="verdictPill"></div>
+      <div class="planbar">
+        <span class="storepill" id="storePill"><span class="dot"></span><span id="storeTxt">no plan open</span></span>
+        <button class="btn" id="planLoad" title="Open a goal_plan.json (or an older plan.js) from your computer">Load plan&hellip;</button>
+        <button class="btn" id="planSave" hidden
+          title="${saveMode() === "download"
+            ? "Downloads goal_plan.json"
+            : "Asks for a folder, writes goal_plan.json there, and keeps the copy it replaces in backups/"}">${saveMode() === "download" ? "Download plan" : "Save plan&hellip;"}</button>
+        <input type="file" id="planFile" accept=".json,.js,application/json,text/javascript" hidden>
+      </div>
+      <div class="saveind" id="saveInd" aria-live="polite"></div>
+    </div>
+    <div class="tabs" role="tablist" id="tabs" hidden>
+      <button class="tab" role="tab" data-tab="dash" aria-selected="true">Dashboard</button>
+      <button class="tab" role="tab" data-tab="inv" aria-selected="false">Portfolio</button>
+      <button class="tab" role="tab" data-tab="goals" aria-selected="false">Goals</button>
+      <button class="tab" role="tab" data-tab="hist" aria-selected="false">History</button>
+      <button class="tab" role="tab" data-tab="years" aria-selected="false">Year by year</button>
+    </div>
+  </div>
+</div>
+<div id="notices"></div>
+<main class="wrap" id="main"></main>`;
+}
+
+/* The page ALWAYS opens here. Two ways in, nothing else. */
+function renderWelcome(){
+  document.getElementById("tabs").hidden = true;
+  document.getElementById("verdictPill").innerHTML = "";
+  document.getElementById("main").innerHTML = `
+    <section class="welcome panel">
+      <h2>Open a plan to begin</h2>
+      <p>Nothing is open. This page does not remember anything from last time.</p>
+      <div class="wbtns">
+        <button class="btn btn-accent btn-lg" id="welcomeLoad">Load a plan&hellip;</button>
+        <button class="btn btn-lg" id="welcomeSample">Start with a sample plan</button>
+      </div>
+      <p class="hint">A plan is a <code>goal_plan.json</code> file. An older <code>plan.js</code> opens too.</p>
+    </section>`;
+  paintStatus();
+}
+
+function showPlan(){
+  document.getElementById("tabs").hidden = false;
+  activeTab = "dash";
+  document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", String(t.dataset.tab === "dash")));
+  reqCurve = null;
+  render();
+  paintStatus();
+}
+
+/* ------------------------------------------------------------- load */
+async function loadFile(file){
+  if (state && DOC.dirty){
+    const go = await askInline(`<b>${esc(DOC.name)}</b> has changes that are not saved. Open <b>${esc(file.name)}</b> and lose them?`,
+      "Discard changes and open", "Keep editing");
+    if (!go) return;
+  }
+  const r = await readPlanFile(file);
+  if (!r.ok){ notice("warn", esc(r.error)); return; }
+  const m = merge(r.loaded);
+  if (!m.ok){
+    notice("warn", m.error === "newer"
+      ? `<b>${esc(file.name)} was written by a newer version of the planner</b> (data v${m.dataVersion}; this page reads up to v${m.pageVersion}). It has been left untouched &mdash; open it with the newer page.`
+      : `<b>${esc(file.name)}</b> could not be opened as a plan.`);
+    return;
+  }
+  clearNotices();
+  state = m.state;
+  const rn = rollForward(state, new Date());
+  rollNote = rn; rollUndo = rn ? rn.undo : null;
+  const est = ensureEstimate(state);
+  Object.assign(DOC, {origin: "file", name: file.name, knownText: r.text,
+                      dirty: !!rn || r.kind === "js" || est, since: new Date()});
+  showPlan();
+  if (est){
+    const e = state.history.find(h => h.estimated);
+    notice("", `<b>Added an estimated ${e.year} to History.</b> With only one recorded year there was nothing to compare; `
+      + `the estimate gives the chart a slope but is left out of the on-track figures. Type the real ${e.year} value to replace it.`);
+  }
+  if (r.kind === "js")
+    notice("", `<b>Opened ${esc(file.name)}, an older-format plan.</b> Save writes it as <b>goal_plan.json</b>; `
+      + `${esc(file.name)} itself is left exactly as it is.`);
+}
+
+function startSample(){
+  state = merge(defaultState()).state;
+  const rn = rollForward(state, new Date());
+  rollNote = rn; rollUndo = rn ? rn.undo : null;
+  Object.assign(DOC, {origin: "sample", name: "sample plan", knownText: null, dirty: true, since: new Date()});
+  clearNotices();
+  showPlan();
+  notice("", `<b>Sample figures &mdash; a made-up household, not anybody's real accounts.</b> Type over anything on the `
+    + `Portfolio, Goals and History tabs. Nothing is saved until you press <b>${saveMode() === "download" ? "Download plan" : "Save plan"}</b>.`);
+}
+
+/* ------------------------------------------------------------- save */
+let saving = false;
+async function doSave(){
+  if (!state || saving) return;
+  saving = true;
+  const btn = document.getElementById("planSave");
+  if (btn) btn.disabled = true;
+  try {
+    const prevSavedAt = state.savedAt;
+    state.savedAt = new Date().toISOString();
+    const text = serialiseJson(state);
+    const folderish = saveMode() !== "download";
+    const r = await savePlanText(text, {
+      isKnown: t => !!DOC.knownText && t.trim() === DOC.knownText.trim(),
+      confirmReplace: (where, summary) => askInline(
+        `<b>${esc(where)}</b> already holds a different plan (${esc(summary)}). Replace it with the one on screen?`
+        + (folderish ? " The file it replaces will be kept in <b>backups/</b>." : ""),
+        "Replace it", "Cancel")
+    });
+    if (!r.ok){
+      state.savedAt = prevSavedAt;
+      if (r.error) notice("warn", `<b>Not saved.</b> ${esc(r.error)}`);
+      else flash("not saved");
+      return;
+    }
+    Object.assign(DOC, {origin: "file", name: r.where, knownText: text, dirty: false, since: new Date()});
+    clearNotices();
+    let msg = r.mode === "download"
+      ? `<b>Downloaded goal_plan.json.</b> It is in your browser's downloads; move it wherever you keep your plan.`
+      : `<b>Saved to ${esc(r.where)}.</b>`;
+    if (r.backup) msg += ` The copy it replaced is kept as <b>${esc(r.backup)}</b>.`;
+    if (r.pruned) msg += ` (${r.pruned} older backup${r.pruned > 1 ? "s" : ""} removed; the newest ${KEEP_BACKUPS} are kept.)`;
+    if (r.note) msg += " " + esc(r.note);
+    notice("", msg);
+    flash("saved");
+  } catch(e){
+    notice("warn", `<b>Not saved.</b> ${esc(e && e.message || String(e))}`);
+  } finally {
+    saving = false;
+    if (btn) btn.disabled = false;
+    paintStatus();
+  }
+}
+
+/* ------------------------------------------------------------- boot */
+function boot(){
+  const root = document.getElementById("gp-root");
+  root.innerHTML = shellHtml();
+  wireEvents();
+
+  const file = document.getElementById("planFile");
+  const pick = () => { file.value = ""; file.click(); };
+  file.addEventListener("change", () => { const f = file.files && file.files[0]; if (f) loadFile(f); });
+  document.getElementById("planLoad").addEventListener("click", pick);
+  document.getElementById("planSave").addEventListener("click", doSave);
+  document.getElementById("main").addEventListener("click", e => {
+    if (e.target.id === "welcomeLoad") pick();
+    if (e.target.id === "welcomeSample") startSample();
+  });
+
+  /* Losing work silently is worth one dialog. */
+  window.addEventListener("beforeunload", e => {
+    if (!state || !DOC.dirty) return;
+    e.preventDefault(); e.returnValue = "";
+  });
+  setInterval(paintStatus, 30000);
+
+  renderWelcome();
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+else boot();
+})();
+</script>
+</body>
+</html>

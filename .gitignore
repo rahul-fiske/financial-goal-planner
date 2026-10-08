@@ -1,0 +1,15 @@
+# Your own plan and its backups live on your computer only, never in the repo
+goal_plan.json
+goal_plan_*.json
+backups/
+*.plan.json
+
+# Spreadsheets generated from a personal plan (the sample workbook in samples/ is kept)
+/Goal_Planner.xlsx
+/dist/
+
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+model.json

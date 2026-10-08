@@ -1,0 +1,23 @@
+{
+  "name": "financial-goal-planner",
+  "version": "1.0.0",
+  "description": "A browser-based financial goal planner. Your plan stays in a file on your own computer.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Rahul Fiske <339444951+rahul-fiske@users.noreply.github.com>",
+  "homepage": "https://rahul-fiske.github.io/financial-goal-planner/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rahul-fiske/financial-goal-planner.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rahul-fiske/financial-goal-planner/issues"
+  },
+  "scripts": {
+    "test": "node --test tests/engine/*.test.mjs",
+    "build": "node build/build_html.mjs",
+    "sample": "node build/make_sample.mjs",
+    "xlsx": "python3 build/build_xlsx.py samples/sample_plan.json samples/Goal_Planner_sample.xlsx",
+    "check": "npm test && npm run build"
+  }
+}

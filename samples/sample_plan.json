@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "v": 2,
+  "savedAt": "2026-01-01T00:00:00.000Z",
+  "a": {
+    "asOf": "2026-09-12",
+    "currentYear": 2026,
+    "currentAge": 38,
+    "retirementAge": 58,
+    "lifeExpectancy": 85,
+    "postRetReturn": 0.065,
+    "usePostRet": true,
+    "cgExempt": 125000,
+    "rolledThrough": 2025
+  },
+  "investments": [
+    {
+      "id": "i5",
+      "name": "Bank deposits",
+      "cat": "Cash",
+      "owner": "Joint",
+      "val": 500000,
+      "cost": 500000,
+      "add": 0,
+      "step": 0,
+      "ret": 0.06,
+      "until": null,
+      "avail": null,
+      "pri": 1,
+      "on": true,
+      "taxWhen": "tax_at_year_end",
+      "taxRate": 0.3
+    },
+    {
+      "id": "i3",
+      "name": "Equity mutual funds",
+      "cat": "Equity",
+      "owner": "Joint",
+      "val": 2200000,
+      "cost": 1400000,
+      "add": 300000,
+      "step": 0.05,
+      "ret": 0.105,
+      "until": null,
+      "avail": null,
+      "pri": 2,
+      "on": true,
+      "taxWhen": "tax_on_withdrawal",
+      "taxRate": 0.125
+    },
+    {
+      "id": "i2",
+      "name": "PPF",
+      "cat": "EPF-PPF",
+      "owner": "Self",
+      "val": 800000,
+      "cost": 800000,
+      "add": 150000,
+      "step": 0,
+      "ret": 0.071,
+      "until": null,
+      "avail": null,
+      "pri": 3,
+      "on": true,
+      "taxWhen": "tax_on_withdrawal",
+      "taxRate": 0
+    },
+    {
+      "id": "i1",
+      "name": "Provident fund (EPF)",
+      "cat": "EPF-PPF",
+      "owner": "Self",
+      "val": 1800000,
+      "cost": 1800000,
+      "add": 180000,
+      "step": 0.05,
+      "ret": 0.075,
+      "until": null,
+      "avail": null,
+      "pri": 4,
+      "on": true,
+      "taxWhen": "tax_on_withdrawal",
+      "taxRate": 0
+    },
+    {
+      "id": "i4",
+      "name": "NPS",
+      "cat": "NPS",
+      "owner": "Self",
+      "val": 600000,
+      "cost": 600000,
+      "add": 60000,
+      "step": 0,
+      "ret": 0.09,
+      "until": null,
+      "avail": 2048,
+      "pri": 5,
+      "on": true,
+      "taxWhen": "tax_on_withdrawal",
+      "taxRate": 0.12
+    }
+  ],
+  "goals": [
+    {
+      "id": "g1",
+      "name": "New car",
+      "kind": "onetime",
+      "start": 2030,
+      "end": 2030,
+      "amt": 1200000,
+      "infl": 0.06,
+      "ess": false,
+      "on": true,
+      "isRet": false
+    },
+    {
+      "id": "g2",
+      "name": "Child's college",
+      "kind": "onetime",
+      "start": 2040,
+      "end": 2040,
+      "amt": 2500000,
+      "infl": 0.07,
+      "ess": true,
+      "on": true,
+      "isRet": false
+    },
+    {
+      "id": "g3",
+      "name": "Retirement expenses",
+      "kind": "recurring",
+      "start": 2046,
+      "end": 2073,
+      "amt": 900000,
+      "infl": 0.06,
+      "ess": true,
+      "on": true,
+      "isRet": true
+    }
+  ],
+  "history": [
+    {
+      "id": "h1",
+      "year": 2022,
+      "actual": 2150000,
+      "contribution": 500000,
+      "note": "Started keeping a record",
+      "snaps": []
+    },
+    {
+      "id": "h2",
+      "year": 2023,
+      "actual": 2940000,
+      "contribution": 550000,
+      "note": "",
+      "snaps": []
+    },
+    {
+      "id": "h3",
+      "year": 2024,
+      "actual": 3830000,
+      "contribution": 600000,
+      "note": "Moved the SIP into index funds",
+      "snaps": []
+    },
+    {
+      "id": "h4",
+      "year": 2025,
+      "actual": 4680000,
+      "contribution": 640000,
+      "note": "Flat market year",
+      "snaps": []
+    },
+    {
+      "id": "h5",
+      "year": 2026,
+      "actual": 5900000,
+      "contribution": 690000,
+      "note": "",
+      "snaps": [
+        {
+          "id": "s1",
+          "date": "2026-03-31",
+          "total": 5480000,
+          "added": 340000,
+          "note": "Q1 SIPs and PF"
+        },
+        {
+          "id": "s2",
+          "date": "2026-09-12",
+          "total": 5900000,
+          "added": 350000,
+          "note": ""
+        }
+      ]
+    }
+  ]
+}
